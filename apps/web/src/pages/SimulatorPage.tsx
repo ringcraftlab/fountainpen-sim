@@ -48,51 +48,68 @@ export function SimulatorPage() {
     return map;
   }, [availableParts]);
 
+  const previewCard = (
+    <div className="rounded-xl bg-[#f5efdf] dark:bg-neutral-900 border border-[#d8d0bb] dark:border-neutral-800 p-4">
+      {partsLoading && parts.length === 0 ? (
+        <div className="h-[420px] flex items-center justify-center text-sm text-neutral-400">
+          読み込み中…
+        </div>
+      ) : (
+        <PenPreview selection={selection} metalColor={metalColor} byId={byId} />
+      )}
+    </div>
+  );
+
+  const actionButtons = (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        onClick={() => randomize(availableParts)}
+        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+        disabled={availableParts.length === 0}
+      >
+        <Shuffle className="w-4 h-4" />
+        ランダムで組み合わせる
+      </button>
+      <button
+        type="button"
+        onClick={reset}
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-300 dark:border-neutral-700 px-4 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
+      >
+        <RotateCcw className="w-4 h-4" />
+        リセット
+      </button>
+    </div>
+  );
+
   return (
     <section className="space-y-6">
       <header className="space-y-3">
         <h2 className="text-xl font-semibold">シミュレーター</h2>
-        <LocationFilter value={locationId} locations={locations} onChange={setLocation} />
-        <MetalColorPicker value={metalColor} onChange={setMetalColor} />
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <LocationFilter value={locationId} locations={locations} onChange={setLocation} />
+          <MetalColorPicker value={metalColor} onChange={setMetalColor} />
+        </div>
       </header>
 
-      <div className="rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-4">
-        {partsLoading && parts.length === 0 ? (
-          <div className="aspect-[1/2] flex items-center justify-center text-sm text-neutral-400">
-            読み込み中…
-          </div>
-        ) : (
-          <PenPreview selection={selection} metalColor={metalColor} byId={byId} />
-        )}
-      </div>
+      {/* Mobile: stack. Desktop (md+): 2-column with sticky preview */}
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] md:gap-8">
+        <div className="md:sticky md:top-4 md:self-start space-y-4">
+          {previewCard}
+          <div className="hidden md:block">{actionButtons}</div>
+        </div>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => randomize(availableParts)}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
-          disabled={availableParts.length === 0}
-        >
-          <Shuffle className="w-4 h-4" />
-          ランダムで組み合わせる
-        </button>
-        <button
-          type="button"
-          onClick={reset}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-300 dark:border-neutral-700 px-4 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
-        >
-          <RotateCcw className="w-4 h-4" />
-          リセット
-        </button>
+        <div className="space-y-4 mt-4 md:mt-0">
+          <div className="md:hidden">{actionButtons}</div>
+          <PartTabs
+            activeTab={activeTab}
+            optionsByType={optionsByType}
+            selection={selection}
+            onChangeTab={setActiveTab}
+            onSelectPart={setPart}
+          />
+        </div>
       </div>
-
-      <PartTabs
-        activeTab={activeTab}
-        optionsByType={optionsByType}
-        selection={selection}
-        onChangeTab={setActiveTab}
-        onSelectPart={setPart}
-      />
     </section>
   );
 }

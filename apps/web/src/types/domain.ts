@@ -28,11 +28,25 @@ export const METAL_COLORS: { id: MetalColor; name: string; hex: string }[] = [
   { id: 'silver', name: 'シルバー', hex: '#c9c9cf' },
 ];
 
+/**
+ * Color: 蓋・胴・大先・尾栓 で共通の色パレット。
+ * kind='clear' は透け感、'milky' は柔らかい不透明色、'solid' は不透明。
+ */
+export type ColorKind = 'solid' | 'milky' | 'clear';
+
+export interface ColorSwatch {
+  id: string;
+  name: string;
+  hex: string;
+  kind: ColorKind;
+}
+
 export interface Part {
   id: string;
   type: PartType;
   name: string;
-  image: string;
+  colorHex: string;
+  colorKind?: ColorKind;
   currentAvailable: boolean;
   locations: string[];
   tags: string[];

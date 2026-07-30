@@ -1,6 +1,7 @@
 import type { MetalColor, Part, PartType, PartsSelection } from '@/types/domain';
-import { METAL_COLORS, PART_TYPES } from '@/types/domain';
+import { METAL_COLORS } from '@/types/domain';
 import { cn } from '@/lib/utils';
+import { PartShape } from './PartShape';
 
 interface PenPreviewProps {
   selection: PartsSelection;
@@ -8,71 +9,113 @@ interface PenPreviewProps {
   byId: (id: string | undefined) => Part | undefined;
 }
 
-const CAP_SECTION: PartType[] = ['cap_top', 'cap'];
-const BODY_SECTION: PartType[] = ['grip', 'barrel', 'barrel_end'];
+const PLACEHOLDER_HEX = '#e5e7eb';
+const PLACEHOLDER_METAL = '#d5d5da';
 
-function MetalBand({ color }: { color: MetalColor }) {
-  const hex = METAL_COLORS.find((c) => c.id === color)?.hex ?? '#d4b04c';
-  return (
-    <svg
-      viewBox="0 0 100 600"
-      preserveAspectRatio="xMidYMid meet"
-      className="absolute inset-0 h-full w-full pointer-events-none"
-    >
-      <rect x="27" y="240" width="46" height="22" fill={hex} />
-    </svg>
-  );
+function partOpacity(part: Part | undefined) {
+  if (!part) return 0.35;
+  // ミルキー系・クリア系は半透明
+  if (part.colorKind === 'milky' || part.colorKind === 'clear') return 0.3;
+  return 1;
+}
+function partColor(part: Part | undefined) {
+  return part?.colorHex ?? PLACEHOLDER_HEX;
+}
+function metalFor(part: Part | undefined, metalHex: string) {
+  return part ? metalHex : PLACEHOLDER_METAL;
 }
 
-function LayerStack({
-  layers,
-  metalColor,
-  showMetal,
+/** 縦長 1:6 の万年筆スタック（PartShape を canonical 位置に重ねる） */
+function PenStack({
+  types,
+  selection,
+  byId,
+  metalHex,
   className,
+  style,
 }: {
-  layers: (Part | undefined)[];
-  metalColor: MetalColor;
-  showMetal: boolean;
+  types: PartType[];
+  selection: PartsSelection;
+  byId: (id: string | undefined) => Part | undefined;
+  metalHex: string;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
-    <div className={cn('relative aspect-[1/6] w-full', className)}>
-      {PART_TYPES.map((type) => {
-        const part = layers.find((p) => p?.type === type);
-        if (!part) return null;
+    <div
+      className={cn('relative h-full aspect-[1/6]', className)}
+      style={style}
+    >
+      {types.map((type) => {
+        const part = byId(selection[type]);
         return (
-          <img
-            key={type}
-            src={part.image}
-            alt={part.name}
-            className="absolute inset-0 h-full w-full object-contain pointer-events-none select-none"
-            draggable={false}
-          />
+          <div key={type} className="absolute inset-0">
+            <PartShape
+              type={type}
+              colorHex={partColor(part)}
+              metalHex={metalFor(part, metalHex)}
+              opacity={partOpacity(part)}
+            />
+          </div>
         );
       })}
-      {showMetal && <MetalBand color={metalColor} />}
     </div>
   );
 }
 
 export function PenPreview({ selection, metalColor, byId }: PenPreviewProps) {
-  const all = PART_TYPES.map((t) => byId(selection[t]));
-  const capOnly = CAP_SECTION.map((t) => byId(selection[t]));
-  const bodyOnly = BODY_SECTION.map((t) => byId(selection[t]));
+  const metalHex = METAL_COLORS.find((c) => c.id === metalColor)?.hex ?? '#d4b04c';
+
+  // 組立: 大先を先に描画 → 蓋を上に重ねる（蓋が透明なら大先が透けて見える）
+  const assembled: PartType[] = ['grip', 'cap_top', 'cap', 'barrel', 'barrel_end'];
+  const capOnly: PartType[] = ['cap_top', 'cap'];
+  const bodyOnly: PartType[] = ['grip', 'barrel', 'barrel_end'];
 
   return (
-    <div className="grid grid-cols-3 gap-4 items-end">
-      <div className="flex flex-col items-center gap-2">
-        <LayerStack layers={all} metalColor={metalColor} showMetal />
+    <div className="flex justify-center items-end gap-6 h-[440px]">
+      {/* View 1: 組立 */}
+      <div className="flex flex-col items-center gap-2 h-full">
+        <PenStack types={assembled} selection={selection} byId={byId} metalHex={metalHex} />
         <span className="text-xs text-neutral-500">組立</span>
       </div>
-      <div className="flex flex-col items-center gap-2">
-        <LayerStack layers={capOnly} metalColor={metalColor} showMetal={false} />
-        <span className="text-xs text-neutral-500">蓋</span>
+
+      {/* View 2: 蓋オフ */}
+      <div className="flex flex-col items-center gap-2 h-full">
+        <div className="flex items-end gap-2 h-full">
+          <PenStack types={capOnly} selection={selection} byId={byId} metalHex={metalHex} />
+          <PenStack types={bodyOnly} selection={selection} byId={byId} metalHex={metalHex} />
+        </div>
+        <span className="text-xs text-neutral-500">蓋オフ</span>
       </div>
-      <div className="flex flex-col items-center gap-2">
-        <LayerStack layers={bodyOnly} metalColor={metalColor} showMetal={false} />
-        <span className="text-xs text-neutral-500">胴</span>
+
+      {/* View 3: キャップポスト = 胴を180°回転(ニブ下)し、蓋を上に重ねる */}
+      <div className="flex flex-col items-center gap-2 h-full">
+        <div className="relative h-full aspect-[1/6]">
+          {/* 胴(大先=蓋オフと同じ画像を180°回転) */}
+          <div
+            className="absolute inset-0"
+            style={{ transform: 'rotate(180deg)' }}
+          >
+            <PenStack
+              types={bodyOnly}
+              selection={selection}
+              byId={byId}
+              metalHex={metalHex}
+              className="!aspect-auto h-full w-full"
+            />
+          </div>
+          {/* 蓋(通常向き、barrel_endの上に重なる) */}
+          <div className="absolute inset-0">
+            <PenStack
+              types={capOnly}
+              selection={selection}
+              byId={byId}
+              metalHex={metalHex}
+              className="!aspect-auto h-full w-full"
+            />
+          </div>
+        </div>
+        <span className="text-xs text-neutral-500">キャップポスト</span>
       </div>
     </div>
   );
