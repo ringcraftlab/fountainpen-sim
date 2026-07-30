@@ -11,7 +11,7 @@ const delay = (ms = 100) => new Promise((r) => setTimeout(r, ms));
 
 const locations: Location[] = [
   { id: 'lab', name: 'Style Of Lab', active: true },
-  { id: 'ankora', name: 'あんコーラ', active: true },
+  { id: 'ankora', name: 'アンコーラ', active: true },
   { id: 'bungujoshi', name: '文具女子博', active: true },
 ];
 
@@ -24,10 +24,6 @@ const parts: Part[] = [
   { id: 'c-pink',  type: 'cap', name: 'さくらもち',   image: '/images/parts/cap-pink.svg',  currentAvailable: true,  locations: ['lab', 'bungujoshi'], tags: ['桃'] },
   { id: 'c-green', type: 'cap', name: 'ひすい',       image: '/images/parts/cap-green.svg', currentAvailable: true,  locations: ['ankora'],            tags: ['緑'] },
   { id: 'c-blue',  type: 'cap', name: 'あさぎ',       image: '/images/parts/cap-blue.svg',  currentAvailable: false, locations: [],                    tags: ['青'] },
-
-  // metal
-  { id: 'm-gold',   type: 'metal', name: 'ゴールド', image: '/images/parts/metal-gold.svg',   currentAvailable: true, locations: ['lab', 'ankora', 'bungujoshi'], tags: ['金'] },
-  { id: 'm-silver', type: 'metal', name: 'シルバー', image: '/images/parts/metal-silver.svg', currentAvailable: true, locations: ['lab'],                          tags: ['銀'] },
 
   // grip
   { id: 'g-gold',   type: 'grip', name: 'サンカヨウ 金', image: '/images/parts/grip-gold.svg',   currentAvailable: true, locations: ['lab', 'bungujoshi'], tags: ['金'] },

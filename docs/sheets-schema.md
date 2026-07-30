@@ -8,17 +8,18 @@
 |---|---|---|---|---|---|---|
 | c-pink | cap | さくらもち | /images/parts/cap-pink.svg | TRUE | lab,bungujoshi | 桃 |
 
-- `type`: `cap_top` / `cap` / `metal` / `grip` / `barrel` / `barrel_end` の 6 種
+- `type`: `cap_top` / `cap` / `grip` / `barrel` / `barrel_end` の 5 種（金属はグローバル選択のためパーツではない）
 - `locations`, `tags`: カンマ区切り
 - `image`: `apps/web/public/` 起点のパス（例: `/images/parts/xxx.svg`）
 
 ## `collections`
 
-| id | name | parts_json | comment | createdAt |
-|---|---|---|---|---|
-| col-001 | お気に入り桜 | `{"cap_top":"ct-black","cap":"c-pink",...}` | 春に使う | 2026-03-01T12:00:00Z |
+| id | name | parts_json | metalColor | comment | createdAt |
+|---|---|---|---|---|---|
+| col-001 | お気に入り桜 | `{"cap_top":"ct-black","cap":"c-pink",...}` | gold | 春に使う | 2026-03-01T12:00:00Z |
 
-- `parts_json`: 6 パーツの選択を JSON 文字列で保存（拡張時に列追加不要）
+- `parts_json`: 5 パーツの選択を JSON 文字列で保存（拡張時に列追加不要）
+- `metalColor`: `gold` / `silver`
 - `createdAt`: ISO8601
 
 ## `inventory`

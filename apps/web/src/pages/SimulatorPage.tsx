@@ -1,19 +1,31 @@
 import { useEffect, useMemo } from 'react';
 import { Shuffle, RotateCcw } from 'lucide-react';
+import type { Part, PartType } from '@/types/domain';
 import { PART_TYPES } from '@/types/domain';
 import { usePartsStore } from '@/lib/stores/partsStore';
 import { useLocationsStore } from '@/lib/stores/locationsStore';
 import { useSimulatorStore } from '@/features/simulator/store';
 import { LocationFilter } from '@/features/simulator/components/LocationFilter';
-import { PartSelector } from '@/features/simulator/components/PartSelector';
+import { MetalColorPicker } from '@/features/simulator/components/MetalColorPicker';
+import { PartTabs } from '@/features/simulator/components/PartTabs';
 import { PenPreview } from '@/features/simulator/components/PenPreview';
 
 export function SimulatorPage() {
   const { parts, loaded: partsLoaded, loading: partsLoading, fetch: fetchParts, byId } =
     usePartsStore();
   const { locations, loaded: locsLoaded, fetch: fetchLocs } = useLocationsStore();
-  const { locationId, selection, setLocation, setPart, randomize, reset } =
-    useSimulatorStore();
+  const {
+    locationId,
+    metalColor,
+    selection,
+    activeTab,
+    setLocation,
+    setMetalColor,
+    setPart,
+    setActiveTab,
+    randomize,
+    reset,
+  } = useSimulatorStore();
 
   useEffect(() => {
     if (!partsLoaded) void fetchParts();
@@ -31,7 +43,7 @@ export function SimulatorPage() {
   );
 
   const optionsByType = useMemo(() => {
-    const map: Record<string, typeof parts> = {};
+    const map = {} as Record<PartType, Part[]>;
     for (const t of PART_TYPES) map[t] = availableParts.filter((p) => p.type === t);
     return map;
   }, [availableParts]);
@@ -41,6 +53,7 @@ export function SimulatorPage() {
       <header className="space-y-3">
         <h2 className="text-xl font-semibold">シミュレーター</h2>
         <LocationFilter value={locationId} locations={locations} onChange={setLocation} />
+        <MetalColorPicker value={metalColor} onChange={setMetalColor} />
       </header>
 
       <div className="rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-4">
@@ -49,7 +62,7 @@ export function SimulatorPage() {
             読み込み中…
           </div>
         ) : (
-          <PenPreview selection={selection} byId={byId} />
+          <PenPreview selection={selection} metalColor={metalColor} byId={byId} />
         )}
       </div>
 
@@ -61,7 +74,7 @@ export function SimulatorPage() {
           disabled={availableParts.length === 0}
         >
           <Shuffle className="w-4 h-4" />
-          ランダム
+          ランダムで組み合わせる
         </button>
         <button
           type="button"
@@ -73,17 +86,13 @@ export function SimulatorPage() {
         </button>
       </div>
 
-      <div className="space-y-5">
-        {PART_TYPES.map((type) => (
-          <PartSelector
-            key={type}
-            type={type}
-            options={optionsByType[type] ?? []}
-            selectedId={selection[type]}
-            onSelect={(id) => setPart(type, id)}
-          />
-        ))}
-      </div>
+      <PartTabs
+        activeTab={activeTab}
+        optionsByType={optionsByType}
+        selection={selection}
+        onChangeTab={setActiveTab}
+        onSelectPart={setPart}
+      />
     </section>
   );
 }

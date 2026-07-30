@@ -1,7 +1,6 @@
 export type PartType =
   | 'cap_top'
   | 'cap'
-  | 'metal'
   | 'grip'
   | 'barrel'
   | 'barrel_end';
@@ -9,7 +8,6 @@ export type PartType =
 export const PART_TYPES: PartType[] = [
   'cap_top',
   'cap',
-  'metal',
   'grip',
   'barrel',
   'barrel_end',
@@ -18,11 +16,17 @@ export const PART_TYPES: PartType[] = [
 export const PART_TYPE_LABELS: Record<PartType, { ja: string; en: string }> = {
   cap_top:    { ja: '蓋栓',      en: 'Cap Top' },
   cap:        { ja: '蓋',        en: 'Cap' },
-  metal:      { ja: '金属パーツ', en: 'Metal Parts' },
   grip:       { ja: '大先',      en: 'Gripping Section' },
   barrel:     { ja: '胴',        en: 'Barrel' },
   barrel_end: { ja: '尾栓',      en: 'Barrel End' },
 };
+
+export type MetalColor = 'gold' | 'silver';
+
+export const METAL_COLORS: { id: MetalColor; name: string; hex: string }[] = [
+  { id: 'gold',   name: 'ゴールド', hex: '#d4b04c' },
+  { id: 'silver', name: 'シルバー', hex: '#c9c9cf' },
+];
 
 export interface Part {
   id: string;
@@ -40,6 +44,7 @@ export interface Collection {
   id: string;
   name: string;
   parts: PartsSelection;
+  metalColor: MetalColor;
   comment: string;
   createdAt: string;
 }
