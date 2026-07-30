@@ -7,7 +7,7 @@ import type {
 } from '@/types/domain';
 import type { ApiClient, PartsFilter } from './types';
 
-const delay = (ms = 120) => new Promise((r) => setTimeout(r, ms));
+const delay = (ms = 100) => new Promise((r) => setTimeout(r, ms));
 
 const locations: Location[] = [
   { id: 'lab', name: 'Style Of Lab', active: true },
@@ -16,17 +16,31 @@ const locations: Location[] = [
 ];
 
 const parts: Part[] = [
-  { id: 'cap-001', type: 'cap', name: '深緑蓋', image: '/images/parts/cap-001.png', currentAvailable: true, locations: ['lab', 'ankora'], tags: ['緑'] },
-  { id: 'cap-002', type: 'cap', name: '桜蓋',   image: '/images/parts/cap-002.png', currentAvailable: true, locations: ['bungujoshi'], tags: ['桃'] },
-  { id: 'cap-003', type: 'cap', name: '藍蓋',   image: '/images/parts/cap-003.png', currentAvailable: true, locations: ['lab'], tags: ['青'] },
+  // cap_top
+  { id: 'ct-black', type: 'cap_top', name: 'オオカミ',   image: '/images/parts/cap_top-black.svg', currentAvailable: true, locations: ['lab', 'ankora'],    tags: ['黒'] },
+  { id: 'ct-gold',  type: 'cap_top', name: 'ゴールド',   image: '/images/parts/cap_top-gold.svg',  currentAvailable: true, locations: ['bungujoshi'],       tags: ['金'] },
 
-  { id: 'body-001', type: 'body', name: '透明胴', image: '/images/parts/body-001.png', currentAvailable: true, locations: ['lab', 'ankora', 'bungujoshi'], tags: ['透明'] },
-  { id: 'body-002', type: 'body', name: '朱塗胴', image: '/images/parts/body-002.png', currentAvailable: true, locations: ['ankora'], tags: ['赤'] },
-  { id: 'body-003', type: 'body', name: '銀胴',   image: '/images/parts/body-003.png', currentAvailable: true, locations: ['lab', 'bungujoshi'], tags: ['銀'] },
+  // cap
+  { id: 'c-pink',  type: 'cap', name: 'さくらもち',   image: '/images/parts/cap-pink.svg',  currentAvailable: true,  locations: ['lab', 'bungujoshi'], tags: ['桃'] },
+  { id: 'c-green', type: 'cap', name: 'ひすい',       image: '/images/parts/cap-green.svg', currentAvailable: true,  locations: ['ankora'],            tags: ['緑'] },
+  { id: 'c-blue',  type: 'cap', name: 'あさぎ',       image: '/images/parts/cap-blue.svg',  currentAvailable: false, locations: [],                    tags: ['青'] },
 
-  { id: 'nib-001', type: 'nib', name: '金大先F', image: '/images/parts/nib-001.png', currentAvailable: true, locations: ['lab'], tags: ['金', 'F'] },
-  { id: 'nib-002', type: 'nib', name: '銀大先M', image: '/images/parts/nib-002.png', currentAvailable: true, locations: ['ankora', 'bungujoshi'], tags: ['銀', 'M'] },
-  { id: 'nib-003', type: 'nib', name: '黒大先B', image: '/images/parts/nib-003.png', currentAvailable: false, locations: [], tags: ['黒', 'B'] },
+  // metal
+  { id: 'm-gold',   type: 'metal', name: 'ゴールド', image: '/images/parts/metal-gold.svg',   currentAvailable: true, locations: ['lab', 'ankora', 'bungujoshi'], tags: ['金'] },
+  { id: 'm-silver', type: 'metal', name: 'シルバー', image: '/images/parts/metal-silver.svg', currentAvailable: true, locations: ['lab'],                          tags: ['銀'] },
+
+  // grip
+  { id: 'g-gold',   type: 'grip', name: 'サンカヨウ 金', image: '/images/parts/grip-gold.svg',   currentAvailable: true, locations: ['lab', 'bungujoshi'], tags: ['金'] },
+  { id: 'g-silver', type: 'grip', name: 'サンカヨウ 銀', image: '/images/parts/grip-silver.svg', currentAvailable: true, locations: ['ankora'],            tags: ['銀'] },
+
+  // barrel
+  { id: 'b-green', type: 'barrel', name: 'ひすい',    image: '/images/parts/barrel-green.svg', currentAvailable: true, locations: ['lab', 'ankora'],     tags: ['緑'] },
+  { id: 'b-pink',  type: 'barrel', name: 'さくらもち', image: '/images/parts/barrel-pink.svg',  currentAvailable: true, locations: ['bungujoshi'],        tags: ['桃'] },
+  { id: 'b-blue',  type: 'barrel', name: 'あさぎ',    image: '/images/parts/barrel-blue.svg',  currentAvailable: true, locations: ['lab'],               tags: ['青'] },
+
+  // barrel_end
+  { id: 'be-black', type: 'barrel_end', name: 'オオカミ', image: '/images/parts/barrel_end-black.svg', currentAvailable: true, locations: ['lab', 'ankora', 'bungujoshi'], tags: ['黒'] },
+  { id: 'be-gold',  type: 'barrel_end', name: 'ゴールド', image: '/images/parts/barrel_end-gold.svg',  currentAvailable: true, locations: ['bungujoshi'],                   tags: ['金'] },
 ];
 
 const collections: Collection[] = [];

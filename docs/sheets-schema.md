@@ -6,15 +6,19 @@
 
 | id | type | name | image | currentAvailable | locations | tags |
 |---|---|---|---|---|---|---|
-| cap-001 | cap | 深緑蓋 | /images/parts/cap-001.png | TRUE | lab,ankora | 緑 |
+| c-pink | cap | さくらもち | /images/parts/cap-pink.svg | TRUE | lab,bungujoshi | 桃 |
 
-- `type`: `cap` / `body` / `nib`
+- `type`: `cap_top` / `cap` / `metal` / `grip` / `barrel` / `barrel_end` の 6 種
 - `locations`, `tags`: カンマ区切り
+- `image`: `apps/web/public/` 起点のパス（例: `/images/parts/xxx.svg`）
 
 ## `collections`
 
-| id | name | capId | bodyId | nibId | comment | createdAt |
+| id | name | parts_json | comment | createdAt |
+|---|---|---|---|---|
+| col-001 | お気に入り桜 | `{"cap_top":"ct-black","cap":"c-pink",...}` | 春に使う | 2026-03-01T12:00:00Z |
 
+- `parts_json`: 6 パーツの選択を JSON 文字列で保存（拡張時に列追加不要）
 - `createdAt`: ISO8601
 
 ## `inventory`
@@ -32,4 +36,4 @@
 ## 運用ルール
 
 - ヘッダー行は 1 行目固定。GAS はヘッダー名で列解決するため、列追加に強い。
-- id は接頭辞つき（`cap-001` など）で衝突回避。GAS 側で採番。
+- id は接頭辞つき（`ct-`, `c-`, `m-`, `g-`, `b-`, `be-`, `col-`）で衝突回避。GAS 側で採番。

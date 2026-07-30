@@ -32,7 +32,7 @@ Content-Type: text/plain;charset=utf-8   # CORSプリフライト回避のため
 | `parts.list` | `{ type?, locationId?, availableOnly? }` | `Part[]` |
 | `parts.get` | `{ id }` | `Part` |
 | `collections.list` | — | `Collection[]` |
-| `collections.create` | `NewCollection` | `Collection` |
+| `collections.create` | `NewCollection` (name / parts / comment) | `Collection` |
 | `collections.delete` | `{ id }` | `void` |
 | `inventory.list` | — | `InventoryEntry[]` |
 | `inventory.upsert` | `InventoryEntry` | `void` |
