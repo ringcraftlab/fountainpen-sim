@@ -54,11 +54,19 @@ export interface Part {
 
 export type PartsSelection = Partial<Record<PartType, string>>;
 
+export type CollectionKind = 'owned' | 'wishlist';
+
+export const COLLECTION_KIND_LABELS: Record<CollectionKind, string> = {
+  owned: '所有中',
+  wishlist: '購入検討',
+};
+
 export interface Collection {
   id: string;
   name: string;
   parts: PartsSelection;
   metalColor: MetalColor;
+  kind: CollectionKind;
   comment: string;
   createdAt: string;
 }

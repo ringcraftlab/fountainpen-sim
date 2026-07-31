@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Shuffle, RotateCcw, Save } from 'lucide-react';
 import { SaveDialog } from '@/features/collections/components/SaveDialog';
+import { useCollectionsStore } from '@/features/collections/store';
 import type { Part, PartType } from '@/types/domain';
 import { PART_TYPES } from '@/types/domain';
 import { usePartsStore } from '@/lib/stores/partsStore';
@@ -8,6 +9,7 @@ import { useLocationsStore } from '@/lib/stores/locationsStore';
 import { useSimulatorStore } from '@/features/simulator/store';
 import { LocationFilter } from '@/features/simulator/components/LocationFilter';
 import { MetalColorPicker } from '@/features/simulator/components/MetalColorPicker';
+import { OwnershipStatus } from '@/features/simulator/components/OwnershipStatus';
 import { PartTabs } from '@/features/simulator/components/PartTabs';
 import { PenPreview } from '@/features/simulator/components/PenPreview';
 
@@ -68,6 +70,12 @@ export function SimulatorPage() {
   );
 
   const [saveOpen, setSaveOpen] = useState(false);
+  const fetchCollections = useCollectionsStore((s) => s.fetch);
+  const collectionsLoaded = useCollectionsStore((s) => s.loaded);
+
+  useEffect(() => {
+    if (!collectionsLoaded) void fetchCollections();
+  }, [collectionsLoaded, fetchCollections]);
 
   const actionButtons = (
     <div className="flex gap-2">
@@ -111,13 +119,17 @@ export function SimulatorPage() {
 
       {/* Mobile: stack. Desktop (md+): 2-column with sticky preview */}
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] md:gap-8">
-        <div className="md:sticky md:top-4 md:self-start space-y-4">
+        <div className="md:sticky md:top-4 md:self-start space-y-3">
           {previewCard}
+          <OwnershipStatus selection={selection} />
           <div className="hidden md:block">{actionButtons}</div>
         </div>
 
         <div className="space-y-4 mt-4 md:mt-0">
           <div className="md:hidden">{actionButtons}</div>
+          <div className="md:hidden">
+            <OwnershipStatus selection={selection} />
+          </div>
           <PartTabs
             activeTab={activeTab}
             optionsByType={optionsByType}

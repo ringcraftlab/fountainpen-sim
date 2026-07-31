@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import type { MetalColor, PartsSelection } from '@/types/domain';
+import type { CollectionKind, MetalColor, PartsSelection } from '@/types/domain';
+import { cn } from '@/lib/utils';
 import { useCollectionsStore } from '../store';
 
 interface Props {
@@ -15,6 +16,7 @@ export function SaveDialog({ open, selection, metalColor, onClose, onSaved }: Pr
   const create = useCollectionsStore((s) => s.create);
   const [name, setName] = useState('');
   const [comment, setComment] = useState('');
+  const [kind, setKind] = useState<CollectionKind>('owned');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,6 +24,7 @@ export function SaveDialog({ open, selection, metalColor, onClose, onSaved }: Pr
     if (open) {
       setName('');
       setComment('');
+      setKind('owned');
       setError(null);
     }
   }, [open]);
@@ -42,6 +45,7 @@ export function SaveDialog({ open, selection, metalColor, onClose, onSaved }: Pr
         name: name.trim(),
         parts: selection,
         metalColor,
+        kind,
         comment: comment.trim(),
       });
       onSaved?.();
@@ -80,6 +84,30 @@ export function SaveDialog({ open, selection, metalColor, onClose, onSaved }: Pr
               パーツが1つも選択されていません
             </div>
           )}
+
+          <div className="space-y-1">
+            <span className="text-sm text-neutral-700 dark:text-neutral-300">種別</span>
+            <div className="flex gap-2">
+              {(['owned', 'wishlist'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKind(k)}
+                  className={cn(
+                    'flex-1 rounded-md border px-3 py-2 text-sm transition-colors',
+                    kind === k
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
+                      : 'border-neutral-300 dark:border-neutral-700 text-neutral-600',
+                  )}
+                >
+                  {k === 'owned' ? '所有中' : '購入検討'}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-neutral-500">
+              「所有中」は実際に持っているペン。「購入検討」は買いたい組み合わせ。
+            </p>
+          </div>
 
           <label className="block space-y-1">
             <span className="text-sm text-neutral-700 dark:text-neutral-300">名前</span>

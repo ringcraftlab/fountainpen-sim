@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import type { Collection } from '@/types/domain';
+import { COLLECTION_KIND_LABELS } from '@/types/domain';
+import { cn } from '@/lib/utils';
 import { useCollectionsStore } from '@/features/collections/store';
 import { usePartsStore } from '@/lib/stores/partsStore';
 import { PenPreview } from '@/features/simulator/components/PenPreview';
@@ -49,7 +51,7 @@ export function CollectionsPage() {
           で組み合わせて保存してください。
         </div>
       ) : (
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {items.map((c) => (
             <CollectionCard
               key={c.id}
@@ -78,8 +80,8 @@ function CollectionCard({
 }) {
   return (
     <li className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 overflow-hidden">
-      <div className="bg-[#f5efdf] dark:bg-neutral-800 p-3 flex justify-center">
-        <div className="h-[240px]">
+      <div className="bg-[#f5efdf] dark:bg-neutral-800 p-2 flex justify-center">
+        <div className="h-[160px]">
           <PenPreview
             selection={collection.parts}
             metalColor={collection.metalColor}
@@ -90,7 +92,19 @@ function CollectionCard({
       <div className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium truncate">{collection.name}</div>
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-medium truncate">{collection.name}</div>
+              <span
+                className={cn(
+                  'text-[10px] px-1.5 py-0.5 rounded-full shrink-0',
+                  collection.kind === 'owned'
+                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
+                    : 'bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300',
+                )}
+              >
+                {COLLECTION_KIND_LABELS[collection.kind]}
+              </span>
+            </div>
             <div className="text-[10px] text-neutral-500">
               {new Date(collection.createdAt).toLocaleDateString('ja-JP')}
             </div>

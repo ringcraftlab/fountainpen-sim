@@ -1,6 +1,8 @@
+import { Check } from 'lucide-react';
 import type { Part, PartType } from '@/types/domain';
 import { PART_TYPES, PART_TYPE_LABELS } from '@/types/domain';
 import { cn } from '@/lib/utils';
+import { useIsOwned } from '@/features/inventory/store';
 
 interface Props {
   activeTab: PartType;
@@ -19,6 +21,7 @@ export function PartTabs({
 }: Props) {
   const options = optionsByType[activeTab] ?? [];
   const selectedId = selection[activeTab];
+  const isOwned = useIsOwned();
   return (
     <div className="space-y-3">
       <div className="rounded-lg bg-neutral-100 dark:bg-neutral-800 p-1 overflow-x-auto">
@@ -62,12 +65,20 @@ export function PartTabs({
                 type="button"
                 onClick={() => onSelectPart(activeTab, active ? undefined : part.id)}
                 className={cn(
-                  'rounded-lg border p-2 flex flex-col items-center gap-1.5 transition-colors',
+                  'relative rounded-lg border p-2 flex flex-col items-center gap-1.5 transition-colors',
                   active
                     ? 'border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-900'
                     : 'border-neutral-200 dark:border-neutral-800 hover:border-neutral-400',
                 )}
               >
+                {isOwned(part.id) && (
+                  <span
+                    className="absolute top-1 right-1 w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center"
+                    title="所有中"
+                  >
+                    <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                  </span>
+                )}
                 <div
                   className="w-10 h-10 rounded-full border border-neutral-300 dark:border-neutral-600 shadow-sm"
                   style={{ background: part.colorHex, opacity }}
