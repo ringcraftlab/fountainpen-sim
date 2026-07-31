@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Shuffle, RotateCcw, Save, Share2, Check, Download } from 'lucide-react';
+import { Shuffle, RotateCcw, Save, Share2, Check, Download, FileText } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { SaveDialog } from '@/features/collections/components/SaveDialog';
 import { useCollectionsStore } from '@/features/collections/store';
 import { useUrlSync, buildShareUrl } from '@/features/simulator/useUrlSync';
+import { OrderSheet } from '@/features/simulator/components/OrderSheet';
 import type { Part, PartType } from '@/types/domain';
 import { PART_TYPES } from '@/types/domain';
 import { usePartsStore } from '@/lib/stores/partsStore';
@@ -54,6 +55,7 @@ export function SimulatorPage() {
   }, [availableParts]);
 
   const [saveOpen, setSaveOpen] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -167,11 +169,20 @@ export function SimulatorPage() {
           disabled={exporting}
           className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
           aria-label="PNG保存"
-          title="PNG画像として保存"
+          title="プレビューをPNG画像として保存"
         >
           <Download className="w-4 h-4" />
         </button>
       </div>
+      <button
+        type="button"
+        onClick={() => setOrderOpen(true)}
+        className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-neutral-400 dark:border-neutral-600 px-3 py-2 text-sm font-medium hover:bg-neutral-100 dark:hover:bg-neutral-800"
+        title="店頭で見せる指示書を表示"
+      >
+        <FileText className="w-4 h-4" />
+        指示書を表示
+      </button>
     </div>
   );
 
@@ -213,6 +224,13 @@ export function SimulatorPage() {
         selection={selection}
         metalColor={metalColor}
         onClose={() => setSaveOpen(false)}
+      />
+      <OrderSheet
+        open={orderOpen}
+        selection={selection}
+        metalColor={metalColor}
+        byId={byId}
+        onClose={() => setOrderOpen(false)}
       />
     </section>
   );
