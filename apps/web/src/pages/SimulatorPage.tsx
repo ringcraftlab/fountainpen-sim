@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Shuffle, RotateCcw, Save, Share2, Check } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Shuffle, RotateCcw, Save, Share2, Check, Download } from 'lucide-react';
+import { toPng } from 'html-to-image';
 import { SaveDialog } from '@/features/collections/components/SaveDialog';
 import { useCollectionsStore } from '@/features/collections/store';
 import { useUrlSync, buildShareUrl } from '@/features/simulator/useUrlSync';
@@ -52,8 +53,15 @@ export function SimulatorPage() {
     return map;
   }, [availableParts]);
 
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const fetchCollections = useCollectionsStore((s) => s.fetch);
+  const collectionsLoaded = useCollectionsStore((s) => s.loaded);
+
   const previewCard = (
-    <div className="rounded-xl bg-[#faf5ea] dark:bg-neutral-900 border border-[#d8cca8] dark:border-neutral-800 p-4 shadow-inner relative overflow-hidden"
+    <div ref={previewRef} className="rounded-xl bg-[#faf5ea] dark:bg-neutral-900 border border-[#d8cca8] dark:border-neutral-800 p-4 shadow-inner relative overflow-hidden"
       style={{
         backgroundImage:
           'repeating-linear-gradient(135deg, transparent 0 12px, rgba(200,180,130,0.08) 12px 13px)',
@@ -70,11 +78,6 @@ export function SimulatorPage() {
     </div>
   );
 
-  const [saveOpen, setSaveOpen] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
-  const fetchCollections = useCollectionsStore((s) => s.fetch);
-  const collectionsLoaded = useCollectionsStore((s) => s.loaded);
-
   useUrlSync();
 
   useEffect(() => {
@@ -90,6 +93,24 @@ export function SimulatorPage() {
     } catch {
       // clipboard 失敗時は prompt でフォールバック
       window.prompt('この URL をコピーしてください', url);
+    }
+  }
+
+  async function handleExportPng() {
+    if (!previewRef.current) return;
+    setExporting(true);
+    try {
+      const dataUrl = await toPng(previewRef.current, {
+        pixelRatio: 2,
+        backgroundColor: '#faf5ea',
+        cacheBust: true,
+      });
+      const link = document.createElement('a');
+      link.download = `fountainpen-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -139,6 +160,16 @@ export function SimulatorPage() {
               URL共有
             </>
           )}
+        </button>
+        <button
+          type="button"
+          onClick={handleExportPng}
+          disabled={exporting}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
+          aria-label="PNG保存"
+          title="PNG画像として保存"
+        >
+          <Download className="w-4 h-4" />
         </button>
       </div>
     </div>
