@@ -55,7 +55,7 @@ export function PartTabs({
           {options.map((part) => {
             const active = part.id === selectedId;
             const opacity =
-              part.colorKind === 'milky' || part.colorKind === 'clear' ? 0.3 : 1;
+              part.colorKind === 'clear' ? 0.55 : part.colorKind === 'milky' ? 0.7 : 1;
             return (
               <button
                 key={part.id}

@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react';
-import { Shuffle, RotateCcw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Shuffle, RotateCcw, Save } from 'lucide-react';
+import { SaveDialog } from '@/features/collections/components/SaveDialog';
 import type { Part, PartType } from '@/types/domain';
 import { PART_TYPES } from '@/types/domain';
 import { usePartsStore } from '@/lib/stores/partsStore';
@@ -49,35 +50,51 @@ export function SimulatorPage() {
   }, [availableParts]);
 
   const previewCard = (
-    <div className="rounded-xl bg-[#f5efdf] dark:bg-neutral-900 border border-[#d8d0bb] dark:border-neutral-800 p-4">
-      {partsLoading && parts.length === 0 ? (
-        <div className="h-[420px] flex items-center justify-center text-sm text-neutral-400">
-          読み込み中…
-        </div>
-      ) : (
-        <PenPreview selection={selection} metalColor={metalColor} byId={byId} />
-      )}
+    <div className="rounded-xl bg-[#faf5ea] dark:bg-neutral-900 border border-[#d8cca8] dark:border-neutral-800 p-4 shadow-inner relative overflow-hidden"
+      style={{
+        backgroundImage:
+          'repeating-linear-gradient(135deg, transparent 0 12px, rgba(200,180,130,0.08) 12px 13px)',
+      }}>
+      <div className="h-[448px] [&_svg]:drop-shadow-[0_2px_2px_rgba(60,50,30,0.15)]">
+        {partsLoading && parts.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-sm text-neutral-400">
+            読み込み中…
+          </div>
+        ) : (
+          <PenPreview selection={selection} metalColor={metalColor} byId={byId} />
+        )}
+      </div>
     </div>
   );
+
+  const [saveOpen, setSaveOpen] = useState(false);
 
   const actionButtons = (
     <div className="flex gap-2">
       <button
         type="button"
         onClick={() => randomize(availableParts)}
-        className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
         disabled={availableParts.length === 0}
       >
         <Shuffle className="w-4 h-4" />
-        ランダムで組み合わせる
+        ランダム
+      </button>
+      <button
+        type="button"
+        onClick={() => setSaveOpen(true)}
+        className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-2 text-sm font-medium hover:opacity-90"
+      >
+        <Save className="w-4 h-4" />
+        保存
       </button>
       <button
         type="button"
         onClick={reset}
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-300 dark:border-neutral-700 px-4 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
+        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
+        aria-label="リセット"
       >
         <RotateCcw className="w-4 h-4" />
-        リセット
       </button>
     </div>
   );
@@ -110,6 +127,13 @@ export function SimulatorPage() {
           />
         </div>
       </div>
+
+      <SaveDialog
+        open={saveOpen}
+        selection={selection}
+        metalColor={metalColor}
+        onClose={() => setSaveOpen(false)}
+      />
     </section>
   );
 }
