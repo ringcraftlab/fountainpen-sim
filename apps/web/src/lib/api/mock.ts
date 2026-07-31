@@ -11,7 +11,7 @@ import type { ApiClient, PartsFilter } from './types';
 
 const delay = (ms = 100) => new Promise((r) => setTimeout(r, ms));
 
-const locations: Location[] = [
+export const seedLocations: Location[] = [
   { id: 'lab', name: 'Style Of Lab', active: true },
   { id: 'ankora', name: 'アンコーラ', active: true },
   { id: 'bungujoshi', name: '文具女子博', active: true },
@@ -32,7 +32,7 @@ const PREFIX: Record<PartType, string> = {
  * MVP デモ用途のため全色を全パーツで有効化する。
  * 実運用では Sheets から currentAvailable / locations を上書きする。
  */
-function generateParts(): Part[] {
+export function generateSeedParts(): Part[] {
   const partTypes: PartType[] = ['cap_top', 'cap', 'grip', 'barrel', 'barrel_end'];
   const parts: Part[] = [];
   for (const type of partTypes) {
@@ -52,7 +52,8 @@ function generateParts(): Part[] {
   return parts;
 }
 
-const parts = generateParts();
+const parts = generateSeedParts();
+const locations = seedLocations;
 const collections: Collection[] = [];
 const inventory = new Map<string, InventoryEntry>();
 

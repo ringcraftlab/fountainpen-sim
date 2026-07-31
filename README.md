@@ -161,7 +161,18 @@ npm run dev
 # → http://localhost:5173
 ```
 
-環境変数 `VITE_GAS_ENDPOINT` を設定しない場合はモック（メモリ内）で動作します。
+デフォルトは **LocalStorage** で動作するのでセットアップ不要。
+
+## ストレージ切替
+
+| プロバイダ | 用途 | データ保存先 | 環境変数 |
+|---|---|---|---|
+| **local** (デフォルト) | 公開デモ / 気軽な個人利用 | ブラウザの LocalStorage | `VITE_API_PROVIDER=local` |
+| **gas** | 本格個人利用 (端末間共有) | Google Sheets | `VITE_API_PROVIDER=gas` + `VITE_GAS_ENDPOINT=...` |
+| **mock** | UI 開発 / テスト | メモリ (リロードで消える) | `VITE_API_PROVIDER=mock` |
+
+- 環境変数未指定なら `local`
+- `VITE_GAS_ENDPOINT` 単独指定なら `gas` として自動判定 (後方互換)
 
 ## GAS + Google Sheets セットアップ
 
