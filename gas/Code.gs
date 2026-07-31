@@ -338,9 +338,5 @@ function setupSheets() {
   });
   partsSheet.getRange(2, 1, partRows.length, 8).setValues(partRows);
 
-  SpreadsheetApp.getUi().alert(
-    'セットアップ完了',
-    'シート4つ、販売場所3件、パーツ ' + partRows.length + ' 件を作成しました。',
-    SpreadsheetApp.getUi().ButtonSet.OK,
-  );
+  Logger.log('セットアップ完了: シート4つ、販売場所3件、パーツ ' + partRows.length + ' 件を作成しました。');
 }
