@@ -322,8 +322,19 @@ function setupSheets() {
   const prefix = { cap_top: 'ct', cap: 'c', grip: 'g', barrel: 'b', barrel_end: 'be' };
   const partsSheet = ss.getSheetByName('parts');
   const partRows = [];
-  types.forEach(function (type) {
-    palette.forEach(function (c) {
+  // 販売場所を色ごとに分散: 実運用に近い感じで、パーツごとに販売店舗が異なる
+  const LOC_PATTERNS = [
+    ['lab', 'ankora', 'bungujoshi'],  // 3店舗
+    ['lab', 'ankora'],
+    ['lab', 'bungujoshi'],
+    ['ankora', 'bungujoshi'],
+    ['lab'],
+    ['ankora'],
+    ['bungujoshi'],
+  ];
+  types.forEach(function (type, ti) {
+    palette.forEach(function (c, ci) {
+      const pattern = LOC_PATTERNS[(ti * 7 + ci * 3) % LOC_PATTERNS.length];
       partRows.push([
         prefix[type] + '-' + c[0],
         type,
@@ -331,7 +342,7 @@ function setupSheets() {
         c[2],
         c[3],
         true,
-        'lab,ankora,bungujoshi',
+        pattern.join(','),
         c[3],
       ]);
     });
