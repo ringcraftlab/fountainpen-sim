@@ -7,6 +7,9 @@ import type {
 } from '@/types/domain';
 import { ApiError, type ApiClient, type ApiResponse, type PartsFilter } from './types';
 
+// GAS Web App は CORS プリフライトを扱えないため text/plain で送る。
+// GAS 側は e.postData.contents を JSON.parse するので body 形式は同じ。
+
 interface GasClientConfig {
   endpoint: string;
 }
