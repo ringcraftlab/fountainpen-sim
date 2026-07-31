@@ -3,6 +3,7 @@ import { X, Download } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import type { MetalColor, Part, PartsSelection, PartType } from '@/types/domain';
 import { METAL_COLORS, PART_TYPE_LABELS } from '@/types/domain';
+import { PenPreview } from './PenPreview';
 
 interface Props {
   open: boolean;
@@ -102,16 +103,22 @@ export function OrderSheet({ open, selection, metalColor, byId, onClose }: Props
           </button>
         </div>
 
-        <div className="p-5">
+        <div className="p-5 max-h-[80vh] overflow-y-auto">
           <div
             ref={sheetRef}
-            className="rounded-xl p-4 space-y-2"
+            className="rounded-xl p-4"
             style={{
               backgroundImage:
                 'repeating-linear-gradient(135deg, #faf5ea 0 12px, rgba(200,180,130,0.08) 12px 13px)',
               backgroundColor: '#faf5ea',
             }}
           >
+            {/* ペンプレビュー */}
+            <div className="h-[280px] mb-4 [&_svg]:drop-shadow-[0_2px_2px_rgba(60,50,30,0.15)]">
+              <PenPreview selection={selection} metalColor={metalColor} byId={byId} />
+            </div>
+            {/* 指示書リスト */}
+            <div className="space-y-2">
             {rows.map((r, i) => {
               if (!r) return null;
               // 薄い/透過的な色は文字を暗くしないと見えないので判定
@@ -145,6 +152,7 @@ export function OrderSheet({ open, selection, metalColor, byId, onClose }: Props
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
 
