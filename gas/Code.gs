@@ -300,13 +300,21 @@ function listLocations() {
 // セットアップ: colors シートに 23色を投入、parts シートは廃止
 // ============================================================
 
+/**
+ * 初回セットアップ (既存データは保全)。
+ *   - 各シートは「無ければ作成 + 種データ投入」、有れば触らない
+ *   - 旧 parts シートは検出したら削除
+ * 完全リセットしたい場合は resetSheets() を使用
+ */
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // --- colors ---
-  let s = ss.getSheetByName('colors') || ss.insertSheet('colors');
-  s.clear();
-  s.appendRow(['id', 'name', 'hex', 'category', 'status', 'sortOrder', 'locations', 'note']);
+  // --- colors (既存があればスキップ) ---
+  let s = ss.getSheetByName('colors');
+  const seedColors = !s;
+  if (!s) s = ss.insertSheet('colors');
+  if (seedColors) {
+    s.appendRow(['id', 'name', 'hex', 'category', 'status', 'sortOrder', 'locations', 'note']);
 
   const PALETTE = [
     ['clear',          'クリア',             '#e5e7eb', 'clear'],
@@ -342,35 +350,52 @@ function setupSheets() {
     'ankora',
     'bungujoshi',
   ];
-  const rows = PALETTE.map(function (p, i) {
-    return [p[0], p[1], p[2], p[3], 'ACTIVE', (i + 1) * 10, LOC_PATTERNS[i % LOC_PATTERNS.length], ''];
-  });
-  s.getRange(2, 1, rows.length, 8).setValues(rows);
+    const rows = PALETTE.map(function (p, i) {
+      return [p[0], p[1], p[2], p[3], 'ACTIVE', (i + 1) * 10, LOC_PATTERNS[i % LOC_PATTERNS.length], ''];
+    });
+    s.getRange(2, 1, rows.length, 8).setValues(rows);
+  }
 
-  // --- collections ---
-  s = ss.getSheetByName('collections') || ss.insertSheet('collections');
-  s.clear();
-  s.appendRow(['id', 'name', 'parts_json', 'metalColor', 'kind', 'comment', 'createdAt']);
+  // --- collections (既存維持) ---
+  if (!ss.getSheetByName('collections')) {
+    s = ss.insertSheet('collections');
+    s.appendRow(['id', 'name', 'parts_json', 'metalColor', 'kind', 'comment', 'createdAt']);
+  }
 
-  // --- inventory ---
-  s = ss.getSheetByName('inventory') || ss.insertSheet('inventory');
-  s.clear();
-  s.appendRow(['partId', 'owned', 'wishlist']);
+  // --- inventory (既存維持) ---
+  if (!ss.getSheetByName('inventory')) {
+    s = ss.insertSheet('inventory');
+    s.appendRow(['partId', 'owned', 'wishlist']);
+  }
 
-  // --- locations ---
-  s = ss.getSheetByName('locations') || ss.insertSheet('locations');
-  s.clear();
-  s.appendRow(['id', 'name', 'active']);
-  const locs = [
-    ['lab',        'Style Of Lab', true],
-    ['ankora',     'アンコーラ',   true],
-    ['bungujoshi', '文具女子博',   true],
-  ];
-  s.getRange(2, 1, locs.length, 3).setValues(locs);
+  // --- locations (既存維持) ---
+  if (!ss.getSheetByName('locations')) {
+    s = ss.insertSheet('locations');
+    s.appendRow(['id', 'name', 'active']);
+    const locs = [
+      ['lab',        'Style Of Lab', true],
+      ['ankora',     'アンコーラ',   true],
+      ['bungujoshi', '文具女子博',   true],
+    ];
+    s.getRange(2, 1, locs.length, 3).setValues(locs);
+  }
 
   // 旧 parts シートは廃止 (存在すれば削除)
   const oldParts = ss.getSheetByName('parts');
   if (oldParts) ss.deleteSheet(oldParts);
 
-  Logger.log('セットアップ完了: colors 23色 + locations 3件 + collections/inventory (parts シートは廃止)');
+  Logger.log('セットアップ完了 (既存データは保全): colors' + (seedColors ? ' 23色投入' : ' 既存維持') + ' / 旧 parts シート削除');
+}
+
+/**
+ * 全シートをリセット (全データ消える)。
+ * 開発時のみ使用。実行前に必ずバックアップを取ってください。
+ */
+function resetSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ['colors', 'collections', 'inventory', 'locations', 'parts'].forEach(function (name) {
+    const s = ss.getSheetByName(name);
+    if (s) ss.deleteSheet(s);
+  });
+  setupSheets();
 }
