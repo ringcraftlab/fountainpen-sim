@@ -1,16 +1,23 @@
 /**
  * Fountain Pen Buffet Simulator — GAS Web App
  *
+ * データモデル (2026-08 リファクタ):
+ *   colors シート: 1色 = 1行 (id / name / hex / category / status / sortOrder / locations / note)
+ *   parts はサーバー側で colors × 5パーツタイプ から派生生成
+ *
  * エントリ:
- *   doPost(e) → JSON リクエスト {action, params} → JSON レスポンス {ok, data|error}
+ *   doPost(e) → JSON {action, params} → JSON {ok, data|error}
  *
  * 初期セットアップ:
  *   1) 空の Google Sheets を作成
  *   2) 拡張機能 → Apps Script でこのファイルをコピペ
- *   3) 関数 `setupSheets` を実行 → シート4つ + 23色パーツ + 3販売場所を投入
- *   4) デプロイ → ウェブアプリとしてデプロイ (アクセス: 全員)
- *   5) デプロイURLを React 側の VITE_GAS_ENDPOINT に設定
+ *   3) 関数 `setupSheets` を実行 → colors / collections / inventory / locations の4シート作成
+ *   4) デプロイ → ウェブアプリ (アクセス: 全員)
+ *   5) デプロイURLを React の VITE_GAS_ENDPOINT に設定
  */
+
+const PART_TYPES = ['cap_top', 'cap', 'grip', 'barrel', 'barrel_end'];
+const PART_PREFIX = { cap_top: 'ct', cap: 'c', grip: 'g', barrel: 'b', barrel_end: 'be' };
 
 // ============================================================
 // エントリポイント
@@ -47,6 +54,7 @@ function jsonResponse(obj) {
 
 function route(action, params) {
   switch (action) {
+    case 'colors.list':         return listColors(params);
     case 'parts.list':          return listParts(params);
     case 'parts.get':           return getPart(params);
     case 'collections.list':    return listCollections();
@@ -76,7 +84,6 @@ function sheet(name) {
   return s;
 }
 
-/** ヘッダー付きシートを全行取得。1行目 = ヘッダー、以降 = レコード。 */
 function readAll(sheetName) {
   const s = sheet(sheetName);
   const values = s.getDataRange().getValues();
@@ -86,9 +93,7 @@ function readAll(sheetName) {
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
     const obj = {};
-    for (let j = 0; j < header.length; j++) {
-      obj[header[j]] = row[j];
-    }
+    for (let j = 0; j < header.length; j++) obj[header[j]] = row[j];
     rows.push(obj);
   }
   return { header: header, rows: rows };
@@ -133,12 +138,65 @@ function upsertRow(sheetName, key, obj) {
 }
 
 // ============================================================
-// Parts
+// Colors
 // ============================================================
 
+function readAllColors() {
+  const { rows } = readAll('colors');
+  return rows.map(rowToColor).sort(function (a, b) {
+    return (a.sortOrder || 0) - (b.sortOrder || 0);
+  });
+}
+
+function listColors(params) {
+  return readAllColors().filter(function (c) {
+    if (!params.includeDiscontinued && c.status === 'DISCONTINUED') return false;
+    if (params.locationId && c.locations.indexOf(params.locationId) < 0) return false;
+    return true;
+  });
+}
+
+function rowToColor(row) {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    hex: String(row.hex),
+    category: String(row.category || 'solid'),
+    status: String(row.status || 'ACTIVE'),
+    sortOrder: Number(row.sortOrder || 0),
+    locations: String(row.locations || '').split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s; }),
+    note: row.note ? String(row.note) : undefined,
+  };
+}
+
+// ============================================================
+// Parts (colors × types から派生)
+// ============================================================
+
+function partsFromColors(colors) {
+  const parts = [];
+  for (let ti = 0; ti < PART_TYPES.length; ti++) {
+    const type = PART_TYPES[ti];
+    for (let ci = 0; ci < colors.length; ci++) {
+      const c = colors[ci];
+      parts.push({
+        id: PART_PREFIX[type] + '-' + c.id,
+        type: type,
+        name: c.name,
+        colorHex: c.hex,
+        colorKind: c.category,
+        currentAvailable: c.status === 'ACTIVE',
+        locations: c.locations,
+        tags: [c.category],
+      });
+    }
+  }
+  return parts;
+}
+
 function listParts(params) {
-  const { rows } = readAll('parts');
-  return rows.map(rowToPart).filter(function (p) {
+  const colors = readAllColors();
+  return partsFromColors(colors).filter(function (p) {
     if (params.type && p.type !== params.type) return false;
     if (params.availableOnly && !p.currentAvailable) return false;
     if (params.locationId && p.locations.indexOf(params.locationId) < 0) return false;
@@ -147,23 +205,10 @@ function listParts(params) {
 }
 
 function getPart(params) {
-  const { rows } = readAll('parts');
-  const found = rows.map(rowToPart).filter(function (p) { return p.id === params.id; })[0];
+  const parts = partsFromColors(readAllColors());
+  const found = parts.filter(function (p) { return p.id === params.id; })[0];
   if (!found) throw makeError('not_found', 'Part not found: ' + params.id);
   return found;
-}
-
-function rowToPart(row) {
-  return {
-    id: String(row.id),
-    type: String(row.type),
-    name: String(row.name),
-    colorHex: String(row.colorHex),
-    colorKind: row.colorKind ? String(row.colorKind) : undefined,
-    currentAvailable: row.currentAvailable === true || String(row.currentAvailable).toUpperCase() === 'TRUE',
-    locations: String(row.locations || '').split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s; }),
-    tags: String(row.tags || '').split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s; }),
-  };
 }
 
 // ============================================================
@@ -180,11 +225,10 @@ function listCollections() {
 function createCollection(params) {
   const id = 'col-' + Date.now();
   const createdAt = new Date().toISOString();
-  const partsJson = JSON.stringify(params.parts || {});
   const record = {
     id: id,
     name: String(params.name || ''),
-    parts_json: partsJson,
+    parts_json: JSON.stringify(params.parts || {}),
     metalColor: String(params.metalColor || 'gold'),
     kind: String(params.kind || 'owned'),
     comment: String(params.comment || ''),
@@ -201,11 +245,7 @@ function deleteCollection(params) {
 
 function rowToCollection(row) {
   let parts = {};
-  try {
-    parts = row.parts_json ? JSON.parse(row.parts_json) : {};
-  } catch (e) {
-    parts = {};
-  }
+  try { parts = row.parts_json ? JSON.parse(row.parts_json) : {}; } catch (e) { parts = {}; }
   return {
     id: String(row.id),
     name: String(row.name),
@@ -218,7 +258,7 @@ function rowToCollection(row) {
 }
 
 // ============================================================
-// Inventory (現状の React 側では自動導出なので使わないが、API は保持)
+// Inventory
 // ============================================================
 
 function listInventory() {
@@ -257,43 +297,18 @@ function listLocations() {
 }
 
 // ============================================================
-// セットアップ: 初回のみ手動実行 (Apps Script エディタで実行)
-//   1) シートを作成 (parts / collections / inventory / locations)
-//   2) 販売場所3件を投入
-//   3) 23色パーツを 5パーツタイプぶん (合計115件) 投入
+// セットアップ: colors シートに 23色を投入、parts シートは廃止
 // ============================================================
 
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // --- parts ---
-  let s = ss.getSheetByName('parts') || ss.insertSheet('parts');
+  // --- colors ---
+  let s = ss.getSheetByName('colors') || ss.insertSheet('colors');
   s.clear();
-  s.appendRow(['id', 'type', 'name', 'colorHex', 'colorKind', 'currentAvailable', 'locations', 'tags']);
+  s.appendRow(['id', 'name', 'hex', 'category', 'status', 'sortOrder', 'locations', 'note']);
 
-  // --- collections ---
-  s = ss.getSheetByName('collections') || ss.insertSheet('collections');
-  s.clear();
-  s.appendRow(['id', 'name', 'parts_json', 'metalColor', 'kind', 'comment', 'createdAt']);
-
-  // --- inventory ---
-  s = ss.getSheetByName('inventory') || ss.insertSheet('inventory');
-  s.clear();
-  s.appendRow(['partId', 'owned', 'wishlist']);
-
-  // --- locations ---
-  s = ss.getSheetByName('locations') || ss.insertSheet('locations');
-  s.clear();
-  s.appendRow(['id', 'name', 'active']);
-  const locs = [
-    ['lab',        'Style Of Lab', true],
-    ['ankora',     'アンコーラ',   true],
-    ['bungujoshi', '文具女子博',   true],
-  ];
-  s.getRange(2, 1, locs.length, 3).setValues(locs);
-
-  // --- parts: 23色 × 5タイプ = 115行 ---
-  const palette = [
+  const PALETTE = [
     ['clear',          'クリア',             '#e5e7eb', 'clear'],
     ['black',          'ブラック',           '#2b2b30', 'solid'],
     ['fresh_pink',     'フレッシュピンク',   '#f4c0d0', 'solid'],
@@ -318,36 +333,44 @@ function setupSheets() {
     ['blue',           'ブルー',             '#3a5ab8', 'solid'],
     ['clear_taupe',    'クリアトープ',       '#a89a88', 'clear'],
   ];
-  const types = ['cap_top', 'cap', 'grip', 'barrel', 'barrel_end'];
-  const prefix = { cap_top: 'ct', cap: 'c', grip: 'g', barrel: 'b', barrel_end: 'be' };
-  const partsSheet = ss.getSheetByName('parts');
-  const partRows = [];
-  // 販売場所を色ごとに分散: 実運用に近い感じで、パーツごとに販売店舗が異なる
   const LOC_PATTERNS = [
-    ['lab', 'ankora', 'bungujoshi'],  // 3店舗
-    ['lab', 'ankora'],
-    ['lab', 'bungujoshi'],
-    ['ankora', 'bungujoshi'],
-    ['lab'],
-    ['ankora'],
-    ['bungujoshi'],
+    'lab,ankora,bungujoshi',
+    'lab,ankora',
+    'lab,bungujoshi',
+    'ankora,bungujoshi',
+    'lab',
+    'ankora',
+    'bungujoshi',
   ];
-  types.forEach(function (type, ti) {
-    palette.forEach(function (c, ci) {
-      const pattern = LOC_PATTERNS[(ti * 7 + ci * 3) % LOC_PATTERNS.length];
-      partRows.push([
-        prefix[type] + '-' + c[0],
-        type,
-        c[1],
-        c[2],
-        c[3],
-        true,
-        pattern.join(','),
-        c[3],
-      ]);
-    });
+  const rows = PALETTE.map(function (p, i) {
+    return [p[0], p[1], p[2], p[3], 'ACTIVE', (i + 1) * 10, LOC_PATTERNS[i % LOC_PATTERNS.length], ''];
   });
-  partsSheet.getRange(2, 1, partRows.length, 8).setValues(partRows);
+  s.getRange(2, 1, rows.length, 8).setValues(rows);
 
-  Logger.log('セットアップ完了: シート4つ、販売場所3件、パーツ ' + partRows.length + ' 件を作成しました。');
+  // --- collections ---
+  s = ss.getSheetByName('collections') || ss.insertSheet('collections');
+  s.clear();
+  s.appendRow(['id', 'name', 'parts_json', 'metalColor', 'kind', 'comment', 'createdAt']);
+
+  // --- inventory ---
+  s = ss.getSheetByName('inventory') || ss.insertSheet('inventory');
+  s.clear();
+  s.appendRow(['partId', 'owned', 'wishlist']);
+
+  // --- locations ---
+  s = ss.getSheetByName('locations') || ss.insertSheet('locations');
+  s.clear();
+  s.appendRow(['id', 'name', 'active']);
+  const locs = [
+    ['lab',        'Style Of Lab', true],
+    ['ankora',     'アンコーラ',   true],
+    ['bungujoshi', '文具女子博',   true],
+  ];
+  s.getRange(2, 1, locs.length, 3).setValues(locs);
+
+  // 旧 parts シートは廃止 (存在すれば削除)
+  const oldParts = ss.getSheetByName('parts');
+  if (oldParts) ss.deleteSheet(oldParts);
+
+  Logger.log('セットアップ完了: colors 23色 + locations 3件 + collections/inventory (parts シートは廃止)');
 }

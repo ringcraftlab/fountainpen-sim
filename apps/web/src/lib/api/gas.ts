@@ -1,5 +1,7 @@
 import type {
   Collection,
+  ColorSwatch,
+  ColorsFilter,
   InventoryEntry,
   Location,
   NewCollection,
@@ -29,6 +31,9 @@ async function call<T>(endpoint: string, action: string, params: unknown = {}): 
 export function createGasApiClient(config: GasClientConfig): ApiClient {
   const c = <T>(action: string, params?: unknown) => call<T>(config.endpoint, action, params);
   return {
+    colors: {
+      list: (filter?: ColorsFilter) => c<ColorSwatch[]>('colors.list', filter ?? {}),
+    },
     parts: {
       list: (filter?: PartsFilter) => c<Part[]>('parts.list', filter ?? {}),
     },

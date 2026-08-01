@@ -1,5 +1,7 @@
 import type {
   Collection,
+  ColorSwatch,
+  ColorsFilter,
   InventoryEntry,
   Location,
   NewCollection,
@@ -15,6 +17,10 @@ export interface PartsFilter {
 
 export interface PartsApi {
   list(filter?: PartsFilter): Promise<Part[]>;
+}
+
+export interface ColorsApi {
+  list(filter?: ColorsFilter): Promise<ColorSwatch[]>;
 }
 
 export interface CollectionsApi {
@@ -33,6 +39,7 @@ export interface LocationsApi {
 }
 
 export interface ApiClient {
+  colors: ColorsApi;
   parts: PartsApi;
   collections: CollectionsApi;
   inventory: InventoryApi;

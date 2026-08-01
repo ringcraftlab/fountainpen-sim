@@ -30,15 +30,30 @@ export const METAL_COLORS: { id: MetalColor; name: string; hex: string }[] = [
 
 /**
  * Color: 蓋・胴・大先・尾栓 で共通の色パレット。
- * kind='clear' は透け感、'milky' は柔らかい不透明色、'solid' は不透明。
+ * category='clear' は透け感、'milky' は柔らかい不透明色、'solid' は不透明。
  */
 export type ColorKind = 'solid' | 'milky' | 'clear';
+
+/** 色の販売ステータス。DISCONTINUED は廃盤扱い。 */
+export type ColorStatus = 'ACTIVE' | 'DISCONTINUED';
 
 export interface ColorSwatch {
   id: string;
   name: string;
   hex: string;
-  kind: ColorKind;
+  category: ColorKind;
+  status: ColorStatus;
+  sortOrder: number;
+  /** 販売店舗ID (locations.id) — 空配列は「どこでも」扱い */
+  locations: string[];
+  /** イベント名など任意メモ */
+  note?: string;
+}
+
+/** 色フィルタ条件 */
+export interface ColorsFilter {
+  includeDiscontinued?: boolean;
+  locationId?: string;
 }
 
 export interface Part {

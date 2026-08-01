@@ -1,13 +1,13 @@
 import type {
   Collection,
+  ColorSwatch,
   InventoryEntry,
   Location,
   NewCollection,
-  Part,
-  PartType,
 } from '@/types/domain';
 import { COLOR_PALETTE } from '@/features/simulator/colors';
-import type { ApiClient, PartsFilter } from './types';
+import type { ApiClient } from './types';
+import { filterColors, filterParts, partsFromColors } from './parts';
 
 const delay = (ms = 100) => new Promise((r) => setTimeout(r, ms));
 
@@ -17,61 +17,27 @@ export const seedLocations: Location[] = [
   { id: 'bungujoshi', name: '文具女子博', active: true },
 ];
 
-const ALL_LOC = ['lab', 'ankora', 'bungujoshi'];
-
-const PREFIX: Record<PartType, string> = {
-  cap_top: 'ct',
-  cap: 'c',
-  grip: 'g',
-  barrel: 'b',
-  barrel_end: 'be',
-};
-
-/**
- * 各パーツについて、パレット全色をベースに Part を自動生成。
- * MVP デモ用途のため全色を全パーツで有効化する。
- * 実運用では Sheets から currentAvailable / locations を上書きする。
- */
-export function generateSeedParts(): Part[] {
-  const partTypes: PartType[] = ['cap_top', 'cap', 'grip', 'barrel', 'barrel_end'];
-  const parts: Part[] = [];
-  for (const type of partTypes) {
-    for (const color of COLOR_PALETTE) {
-      parts.push({
-        id: `${PREFIX[type]}-${color.id}`,
-        type,
-        name: color.name,
-        colorHex: color.hex,
-        colorKind: color.kind,
-        currentAvailable: true,
-        locations: ALL_LOC,
-        tags: [color.kind],
-      });
-    }
-  }
-  return parts;
-}
-
-const parts = generateSeedParts();
-const locations = seedLocations;
-const collections: Collection[] = [];
-const inventory = new Map<string, InventoryEntry>();
-
-function filterParts(list: Part[], f?: PartsFilter): Part[] {
-  return list.filter((p) => {
-    if (f?.type && p.type !== f.type) return false;
-    if (f?.availableOnly && !p.currentAvailable) return false;
-    if (f?.locationId && !p.locations.includes(f.locationId)) return false;
-    return true;
-  });
+/** 種色 (seed) の色リストを返すヘルパ。他クライアントも共有する。 */
+export function seedColors(): ColorSwatch[] {
+  return [...COLOR_PALETTE];
 }
 
 export function createMockApiClient(): ApiClient {
+  const colors = seedColors();
+  const collections: Collection[] = [];
+  const inventory = new Map<string, InventoryEntry>();
+
   return {
+    colors: {
+      async list(filter) {
+        await delay();
+        return filterColors(colors, filter);
+      },
+    },
     parts: {
       async list(filter) {
         await delay();
-        return filterParts(parts, filter);
+        return filterParts(partsFromColors(colors), filter);
       },
     },
     collections: {
@@ -108,7 +74,7 @@ export function createMockApiClient(): ApiClient {
     locations: {
       async list() {
         await delay();
-        return [...locations];
+        return [...seedLocations];
       },
     },
   };

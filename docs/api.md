@@ -29,7 +29,8 @@ Content-Type: text/plain;charset=utf-8   # CORSプリフライト回避のため
 
 | action | params | data |
 |---|---|---|
-| `parts.list` | `{ type?, locationId?, availableOnly? }` | `Part[]` |
+| `colors.list` | `{ includeDiscontinued?, locationId? }` | `ColorSwatch[]` |
+| `parts.list` | `{ type?, locationId?, availableOnly? }` | `Part[]` (colors から派生) |
 | `parts.get` | `{ id }` | `Part` |
 | `collections.list` | — | `Collection[]` |
 | `collections.create` | `NewCollection` (name / parts / comment) | `Collection` |

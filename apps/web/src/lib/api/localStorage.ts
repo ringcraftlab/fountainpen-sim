@@ -1,16 +1,17 @@
 import type {
   Collection,
+  ColorSwatch,
   InventoryEntry,
   Location,
   NewCollection,
-  Part,
 } from '@/types/domain';
-import type { ApiClient, PartsFilter } from './types';
+import type { ApiClient } from './types';
+import { filterColors, filterParts, partsFromColors } from './parts';
 
 /**
  * LocalStorage ベースの ApiClient。
  * - collections: LocalStorage に配列で保存
- * - parts / locations: seedParts / seedLocations を受け取って返すだけ (ユーザー編集不可)
+ * - colors / parts: seed を単一のソースとして共有 (パーツは colors から派生)
  * - inventory: 現状ドメインから外れているが interface 実装のためスタブ
  *
  * 公開デモ用: ブラウザ単位にコレクションが保存され、他ユーザーに影響しない。
@@ -40,29 +41,25 @@ function writeCollections(items: Collection[]): void {
 }
 
 interface LocalConfig {
-  parts: Part[];
+  colors: ColorSwatch[];
   locations: Location[];
 }
 
 export function createLocalStorageApiClient({
-  parts,
+  colors,
   locations,
 }: LocalConfig): ApiClient {
   const inventory = new Map<string, InventoryEntry>();
 
-  function filterParts(list: Part[], f?: PartsFilter): Part[] {
-    return list.filter((p) => {
-      if (f?.type && p.type !== f.type) return false;
-      if (f?.availableOnly && !p.currentAvailable) return false;
-      if (f?.locationId && !p.locations.includes(f.locationId)) return false;
-      return true;
-    });
-  }
-
   return {
+    colors: {
+      async list(filter) {
+        return filterColors(colors, filter);
+      },
+    },
     parts: {
       async list(filter) {
-        return filterParts(parts, filter);
+        return filterParts(partsFromColors(colors), filter);
       },
     },
     collections: {

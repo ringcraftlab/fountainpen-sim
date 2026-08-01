@@ -1,7 +1,7 @@
 import type { ApiClient } from './types';
 import { createGasApiClient } from './gas';
 import { createLocalStorageApiClient } from './localStorage';
-import { createMockApiClient, generateSeedParts, seedLocations } from './mock';
+import { createMockApiClient, seedColors, seedLocations } from './mock';
 
 type ApiProvider = 'mock' | 'local' | 'gas';
 
@@ -20,9 +20,8 @@ function build(): ApiClient {
     case 'gas': {
       const endpoint = import.meta.env.VITE_GAS_ENDPOINT as string | undefined;
       if (!endpoint) {
-        // gas を指定されたが URL が無い → local へフォールバック
         return createLocalStorageApiClient({
-          parts: generateSeedParts(),
+          colors: seedColors(),
           locations: seedLocations,
         });
       }
@@ -33,7 +32,7 @@ function build(): ApiClient {
     case 'local':
     default:
       return createLocalStorageApiClient({
-        parts: generateSeedParts(),
+        colors: seedColors(),
         locations: seedLocations,
       });
   }
