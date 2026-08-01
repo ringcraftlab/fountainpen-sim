@@ -1,61 +1,27 @@
 /**
- * Fountain Pen Buffet Simulator — GAS Web App
+ * Fountain Pen Buffet Simulator — GAS
  *
- * 設計原則 (2026-08 リファクタ):
- *   1. 初期化 (initializeSheets) と マイグレーション (migrateSheets) と
- *      リセット (resetSheets) は完全に分離
- *   2. データ破壊操作は明示的な確認引数が必要
- *   3. ユーザー操作 (色追加/廃盤) は追記/更新のみ、既存データは触らない
- *   4. マイグレーションは冪等 (idempotent)、既存データを保全
+ * 設計:
+ *   1. マスター (colors / locations) は Google Sheets
+ *   2. React (Vercel) は読み取り専用で使う → 公開API デプロイ
+ *   3. 管理者は Web App UI で色管理 → 管理者専用デプロイ
+ *   4. 書き込み操作は認可チェック必須 (管理者だけ実行可)
  *
- * データモデル:
- *   colors シート: 1色 = 1行 (id / name / hex / category / status / sortOrder / locations / note)
- *   parts はサーバー側で colors × 5パーツタイプ から派生生成 (DBには持たない)
+ * ★ 2つのデプロイを作成すること:
+ *   [1] 公開API デプロイ
+ *       - アクセス: 全員
+ *       - 実行: 自分
+ *       - 用途: React (Vercel/localhost) が POST で叩く
+ *       - 書き込み操作は自動拒否される
+ *   [2] 管理者UI デプロイ
+ *       - アクセス: 自分のみ
+ *       - 実行: 自分
+ *       - 用途: ブラウザで URL を開くと管理画面
+ *       - 書き込み操作 (色追加/廃盤) が可能
  *
- * エントリ:
- *   doPost(e) → JSON {action, params} → JSON {ok, data|error}
- *
- * 管理者用関数 (Apps Script エディタから直接実行):
- *   initializeSheets()   — 空スプシに初期構築 (既にシートがあれば拒否)
- *   migrateSheets()      — 冪等、既存データ保全、不足シート追加のみ
- *   resetSheets(confirm) — 全消去 + 初期化 (引数に文字列 'CONFIRM_RESET' 必須)
+ * ★ Script Properties に ADMIN_EMAIL = あなたの Google メールアドレスを設定すること。
+ *   認可判定に使う。
  */
-
-// ============================================================
-// Sheets カスタムメニュー (スプレッドシートを開いたときに自動追加)
-// ============================================================
-
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('万年筆buffet')
-    .addItem('パレット管理を開く', 'showPaletteSidebar')
-    .addSeparator()
-    .addItem('初期セットアップ (initializeSheets)', 'initializeSheets')
-    .addItem('マイグレーション (migrateSheets)', 'migrateSheets')
-    .addToUi();
-}
-
-function showPaletteSidebar() {
-  const html = HtmlService.createHtmlOutputFromFile('PaletteSidebar')
-    .setTitle('パレット管理')
-    .setWidth(360);
-  SpreadsheetApp.getUi().showSidebar(html);
-}
-
-// サイドバー HTML から呼ばれるサーバー関数 (google.script.run 用)
-function apiListColors() {
-  return readAllColors();
-}
-function apiUpsertColor(input) {
-  return upsertColor(input);
-}
-function apiUpdateColorStatus(id, status) {
-  return updateColorStatus({ id: id, status: status });
-}
-
-// ============================================================
-// 定数
-// ============================================================
 
 const PART_TYPES = ['cap_top', 'cap', 'grip', 'barrel', 'barrel_end'];
 const PART_PREFIX = { cap_top: 'ct', cap: 'c', grip: 'g', barrel: 'b', barrel_end: 'be' };
@@ -72,15 +38,67 @@ const HEADERS = {
   locations:   ['id', 'name', 'active'],
 };
 
+/** 書き込み系 action (これらは requireAdmin) */
+const WRITE_ACTIONS = [
+  'colors.upsert',
+  'colors.updateStatus',
+  'collections.create',
+  'collections.delete',
+  'inventory.upsert',
+];
+
+// ============================================================
+// 認可
+// ============================================================
+
+/**
+ * 管理者判定。
+ * - 「Access: Only myself」デプロイでのみ Session.getActiveUser() が値を返す
+ * - 「Access: Anyone」デプロイでは常に '' → 拒否される
+ * → 公開API デプロイからは書き込み不可、管理者UI デプロイからのみ可能
+ */
+function requireAdmin() {
+  const email = Session.getActiveUser().getEmail();
+  const admin = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL');
+  if (!admin) {
+    throw makeError('config_missing', 'Script Properties に ADMIN_EMAIL を設定してください');
+  }
+  if (!email || email !== admin) {
+    throw makeError('forbidden', 'この操作は管理者のみ実行できます (email=' + (email || 'anonymous') + ')');
+  }
+}
+
 // ============================================================
 // エントリポイント
 // ============================================================
+
+/** GET: 管理者UI (HTML) を返す。認可 = ブラウザで開ける = 管理者のみアクセス許可されたデプロイ */
+function doGet() {
+  const email = Session.getActiveUser().getEmail();
+  const admin = PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL');
+  if (!admin || email !== admin) {
+    return HtmlService.createHtmlOutput(
+      '<h1 style="font-family:sans-serif;padding:40px;text-align:center;color:#666">' +
+      'Access Denied' +
+      '</h1>' +
+      '<p style="font-family:sans-serif;text-align:center;color:#999">' +
+      'このURLは管理者専用です。' +
+      '</p>'
+    );
+  }
+  return HtmlService.createHtmlOutputFromFile('AdminApp')
+    .setTitle('パレット管理 — Fountain Pen Buffet')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
 
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents || '{}');
     const action = body.action;
     const params = body.params || {};
+    if (WRITE_ACTIONS.indexOf(action) >= 0) {
+      requireAdmin();
+    }
     const data = route(action, params);
     return jsonResponse({ ok: true, data: data });
   } catch (err) {
@@ -91,10 +109,6 @@ function doPost(e) {
   }
 }
 
-function doGet() {
-  return jsonResponse({ ok: true, data: { message: 'Fountain Pen Buffet API' } });
-}
-
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
     ContentService.MimeType.JSON,
@@ -103,15 +117,15 @@ function jsonResponse(obj) {
 
 function route(action, params) {
   switch (action) {
-    // 読み取り
+    // 読み取り (公開)
     case 'colors.list':         return listColors(params);
     case 'parts.list':          return listParts(params);
     case 'parts.get':           return getPart(params);
+    case 'locations.list':      return listLocations();
     case 'collections.list':    return listCollections();
     case 'inventory.list':      return listInventory();
-    case 'locations.list':      return listLocations();
 
-    // 書き込み (追加/更新のみ、破壊操作なし)
+    // 書き込み (要 requireAdmin, 上で判定済)
     case 'colors.upsert':       return upsertColor(params);
     case 'colors.updateStatus': return updateColorStatus(params);
     case 'collections.create':  return createCollection(params);
@@ -127,6 +141,23 @@ function makeError(code, message) {
   const err = new Error(message);
   err.code = code;
   return err;
+}
+
+// ============================================================
+// 管理者UI HTML → 内部呼び出し用サーバー関数 (google.script.run)
+// ============================================================
+
+function apiListColors() {
+  requireAdmin();
+  return readAllColors();
+}
+function apiUpsertColor(input) {
+  requireAdmin();
+  return upsertColor(input);
+}
+function apiUpdateColorStatus(id, status) {
+  requireAdmin();
+  return updateColorStatus({ id: id, status: status });
 }
 
 // ============================================================
@@ -173,15 +204,6 @@ function findRowIndex(sheetName, key, value) {
   return -1;
 }
 
-function updateRow(sheetName, key, obj) {
-  const s = sheet(sheetName);
-  const header = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
-  const rowNum = findRowIndex(sheetName, key, obj[key]);
-  if (rowNum < 0) throw makeError('not_found', 'Row not found: ' + key + '=' + obj[key]);
-  const row = header.map(function (h) { return obj[h] !== undefined ? obj[h] : ''; });
-  s.getRange(rowNum, 1, 1, header.length).setValues([row]);
-}
-
 function upsertRow(sheetName, key, obj) {
   const s = sheet(sheetName);
   const header = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
@@ -202,7 +224,7 @@ function deleteRowByKey(sheetName, key, value) {
 }
 
 // ============================================================
-// Colors (読み書き)
+// Colors
 // ============================================================
 
 function readAllColors() {
@@ -220,7 +242,6 @@ function listColors(params) {
   });
 }
 
-/** 色を1件追加または更新。 id 必須。既存データ・他色に影響なし。 */
 function upsertColor(params) {
   if (!params.id) throw makeError('validation', 'id is required');
   if (!params.name) throw makeError('validation', 'name is required');
@@ -247,7 +268,6 @@ function upsertColor(params) {
   return rowToColor(record);
 }
 
-/** 色の status を切り替える (廃盤化/復活) 専用。他フィールドには触れない。 */
 function updateColorStatus(params) {
   if (!params.id) throw makeError('validation', 'id is required');
   if (['ACTIVE', 'DISCONTINUED'].indexOf(params.status) < 0) {
@@ -276,7 +296,7 @@ function rowToColor(row) {
 }
 
 // ============================================================
-// Parts (colors × types から派生、DBには格納しない)
+// Parts (colors × types から派生)
 // ============================================================
 
 function partsFromColors(colors) {
@@ -398,11 +418,6 @@ function listLocations() {
 // 管理系: 初期化 / マイグレーション / リセット (完全分離)
 // ============================================================
 
-/**
- * 【初期化】空のスプレッドシートに初期構築する。
- * 既存シートがあれば拒否する (安全ガード)。
- * このアプリを新しいスプレッドシートに導入するときだけ使う。
- */
 function initializeSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const existing = [SHEET_COLORS, SHEET_COLLECTIONS, SHEET_INVENTORY, SHEET_LOCATIONS]
@@ -419,60 +434,24 @@ function initializeSheets() {
   createCollectionsSheet(ss);
   createInventorySheet(ss);
   createLocationsSheetWithSeed(ss);
-  Logger.log('initializeSheets: 初期化完了 (colors 23色 + locations 3件)');
+  Logger.log('initializeSheets: 初期化完了');
 }
 
-/**
- * 【マイグレーション】冪等、既存データを保全。
- * 不足しているシートがあれば追加、既存シートには一切触れない。
- * 何度実行しても安全。バージョンアップ時にも実行する。
- */
 function migrateSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const created = [];
-
-  if (!ss.getSheetByName(SHEET_COLORS)) {
-    createColorsSheetWithSeed(ss);
-    created.push(SHEET_COLORS + ' (種色投入)');
-  }
-  if (!ss.getSheetByName(SHEET_COLLECTIONS)) {
-    createCollectionsSheet(ss);
-    created.push(SHEET_COLLECTIONS);
-  }
-  if (!ss.getSheetByName(SHEET_INVENTORY)) {
-    createInventorySheet(ss);
-    created.push(SHEET_INVENTORY);
-  }
-  if (!ss.getSheetByName(SHEET_LOCATIONS)) {
-    createLocationsSheetWithSeed(ss);
-    created.push(SHEET_LOCATIONS + ' (種データ投入)');
-  }
-
-  // 旧 parts シートを削除 (存在すれば)
+  if (!ss.getSheetByName(SHEET_COLORS)) { createColorsSheetWithSeed(ss); created.push(SHEET_COLORS + ' (種色投入)'); }
+  if (!ss.getSheetByName(SHEET_COLLECTIONS)) { createCollectionsSheet(ss); created.push(SHEET_COLLECTIONS); }
+  if (!ss.getSheetByName(SHEET_INVENTORY)) { createInventorySheet(ss); created.push(SHEET_INVENTORY); }
+  if (!ss.getSheetByName(SHEET_LOCATIONS)) { createLocationsSheetWithSeed(ss); created.push(SHEET_LOCATIONS + ' (種データ投入)'); }
   const oldParts = ss.getSheetByName('parts');
-  if (oldParts) {
-    ss.deleteSheet(oldParts);
-    Logger.log('migrateSheets: 旧 parts シートを削除');
-  }
-
-  if (created.length === 0) {
-    Logger.log('migrateSheets: 変更なし (全シート存在)');
-  } else {
-    Logger.log('migrateSheets: 追加シート = [' + created.join(', ') + ']');
-  }
+  if (oldParts) { ss.deleteSheet(oldParts); Logger.log('migrateSheets: 旧 parts シート削除'); }
+  Logger.log('migrateSheets: ' + (created.length === 0 ? '変更なし' : '追加 [' + created.join(', ') + ']'));
 }
 
-/**
- * 【リセット】全シートを削除して再初期化する破壊的操作。
- * 引数に文字列 'CONFIRM_RESET' が必要。開発時のみ使用。
- * 例: resetSheets('CONFIRM_RESET')
- */
 function resetSheets(confirmation) {
   if (confirmation !== 'CONFIRM_RESET') {
-    throw makeError(
-      'confirmation_required',
-      'resetSheets は破壊的です。実行するには resetSheets("CONFIRM_RESET") を呼んでください。',
-    );
+    throw makeError('confirmation_required', 'resetSheets は破壊的です。実行するには resetSheets("CONFIRM_RESET") を呼んでください。');
   }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   [SHEET_COLORS, SHEET_COLLECTIONS, SHEET_INVENTORY, SHEET_LOCATIONS, 'parts'].forEach(function (name) {
@@ -483,45 +462,24 @@ function resetSheets(confirmation) {
   Logger.log('resetSheets: 全リセット完了');
 }
 
-// --- ヘルパ: 各シートの作成 (単体、他に影響なし) ---
-
 function createColorsSheetWithSeed(ss) {
   const s = ss.insertSheet(SHEET_COLORS);
   s.appendRow(HEADERS.colors);
   const PALETTE = [
-    ['clear',          'クリア',             '#e5e7eb', 'clear'],
-    ['black',          'ブラック',           '#2b2b30', 'solid'],
-    ['fresh_pink',     'フレッシュピンク',   '#f4c0d0', 'solid'],
-    ['rose_pink',      'ローズピンク',       '#b98599', 'solid'],
-    ['light_blue',     'ライトブルー',       '#a4c2d8', 'solid'],
-    ['green',          'グリーン',           '#4fa88b', 'solid'],
-    ['mustard_yellow', 'マスタードイエロー', '#c9a24a', 'solid'],
-    ['taupe',          'トープ',             '#8a7a6a', 'solid'],
-    ['navy_blue',      'ネイビーブルー',     '#252b45', 'solid'],
-    ['white',          'ホワイト',           '#f5f4ef', 'solid'],
-    ['milky_white',    'ミルキーホワイト',   '#f2ecdc', 'milky'],
-    ['clear_coffee',   'クリアコーヒー',     '#a58a72', 'clear'],
-    ['milky_peach',    'ミルキーピーチ',     '#f4c6a8', 'milky'],
-    ['milky_lavender', 'ミルキーラベンダー', '#c9bcd8', 'milky'],
-    ['milky_soda',     'ミルキーソーダ',     '#c8dfe2', 'milky'],
-    ['clear_emerald',  'クリアエメラルド',   '#2b8b7b', 'clear'],
-    ['clear_mango',    'クリアマンゴー',     '#e8ce5a', 'clear'],
-    ['clear_orange',   'クリアオレンジ',     '#e88a4a', 'clear'],
-    ['clear_violet',   'クリアバイオレット', '#7a5aa8', 'clear'],
-    ['clear_muscat',   'クリアマスカット',   '#b8d478', 'clear'],
-    ['red',            'レッド',             '#d33a3a', 'solid'],
-    ['blue',           'ブルー',             '#3a5ab8', 'solid'],
-    ['clear_taupe',    'クリアトープ',       '#a89a88', 'clear'],
+    ['clear', 'クリア', '#e5e7eb', 'clear'], ['black', 'ブラック', '#2b2b30', 'solid'],
+    ['fresh_pink', 'フレッシュピンク', '#f4c0d0', 'solid'], ['rose_pink', 'ローズピンク', '#b98599', 'solid'],
+    ['light_blue', 'ライトブルー', '#a4c2d8', 'solid'], ['green', 'グリーン', '#4fa88b', 'solid'],
+    ['mustard_yellow', 'マスタードイエロー', '#c9a24a', 'solid'], ['taupe', 'トープ', '#8a7a6a', 'solid'],
+    ['navy_blue', 'ネイビーブルー', '#252b45', 'solid'], ['white', 'ホワイト', '#f5f4ef', 'solid'],
+    ['milky_white', 'ミルキーホワイト', '#f2ecdc', 'milky'], ['clear_coffee', 'クリアコーヒー', '#a58a72', 'clear'],
+    ['milky_peach', 'ミルキーピーチ', '#f4c6a8', 'milky'], ['milky_lavender', 'ミルキーラベンダー', '#c9bcd8', 'milky'],
+    ['milky_soda', 'ミルキーソーダ', '#c8dfe2', 'milky'], ['clear_emerald', 'クリアエメラルド', '#2b8b7b', 'clear'],
+    ['clear_mango', 'クリアマンゴー', '#e8ce5a', 'clear'], ['clear_orange', 'クリアオレンジ', '#e88a4a', 'clear'],
+    ['clear_violet', 'クリアバイオレット', '#7a5aa8', 'clear'], ['clear_muscat', 'クリアマスカット', '#b8d478', 'clear'],
+    ['red', 'レッド', '#d33a3a', 'solid'], ['blue', 'ブルー', '#3a5ab8', 'solid'],
+    ['clear_taupe', 'クリアトープ', '#a89a88', 'clear'],
   ];
-  const LOC_PATTERNS = [
-    'lab,ankora,bungujoshi',
-    'lab,ankora',
-    'lab,bungujoshi',
-    'ankora,bungujoshi',
-    'lab',
-    'ankora',
-    'bungujoshi',
-  ];
+  const LOC_PATTERNS = ['lab,ankora,bungujoshi', 'lab,ankora', 'lab,bungujoshi', 'ankora,bungujoshi', 'lab', 'ankora', 'bungujoshi'];
   const rows = PALETTE.map(function (p, i) {
     return [p[0], p[1], p[2], p[3], 'ACTIVE', (i + 1) * 10, LOC_PATTERNS[i % LOC_PATTERNS.length], ''];
   });
@@ -541,10 +499,6 @@ function createInventorySheet(ss) {
 function createLocationsSheetWithSeed(ss) {
   const s = ss.insertSheet(SHEET_LOCATIONS);
   s.appendRow(HEADERS.locations);
-  const locs = [
-    ['lab',        'Style Of Lab', true],
-    ['ankora',     'アンコーラ',   true],
-    ['bungujoshi', '文具女子博',   true],
-  ];
+  const locs = [['lab', 'Style Of Lab', true], ['ankora', 'アンコーラ', true], ['bungujoshi', '文具女子博', true]];
   s.getRange(2, 1, locs.length, HEADERS.locations.length).setValues(locs);
 }

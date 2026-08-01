@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>パレット管理</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #f5f5f7;
+      color: #333;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    .subtitle { color: #666; font-size: 13px; margin: 0 0 24px; }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
+    .filter-tabs { display: flex; gap: 4px; }
+    .btn {
+      font-size: 12px;
+      padding: 6px 12px;
+      border: 1px solid #ccc;
+      background: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn:hover { background: #f0f0f0; }
+    .btn.active, .btn-primary { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-large { padding: 10px 20px; font-size: 14px; font-weight: 500; }
+    .spacer { flex: 1; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .card.discontinued { opacity: 0.55; }
+    .chip { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #ddd; flex-shrink: 0; }
+    .card-body { flex: 1; min-width: 0; }
+    .card-name {
+      font-size: 14px; font-weight: 500;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      background: none; border: none; padding: 0; cursor: pointer; text-align: left; width: 100%;
+      font-family: inherit; color: inherit;
+    }
+    .card-name:hover { text-decoration: underline; }
+    .card-meta { font-size: 11px; color: #999; margin-top: 2px; }
+    .card-actions { display: flex; gap: 4px; }
+    .card-actions .btn { font-size: 11px; padding: 4px 8px; }
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .modal {
+      background: #fff; border-radius: 8px; width: 100%; max-width: 480px;
+      max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    }
+    .modal-header {
+      padding: 16px 20px; border-bottom: 1px solid #eee;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h2 { margin: 0; font-size: 16px; }
+    .modal-close {
+      background: none; border: none; font-size: 20px; cursor: pointer; color: #999;
+    }
+    .modal-body { padding: 20px; }
+    .form-field { margin-bottom: 12px; }
+    .form-field label { display: block; font-size: 11px; color: #666; margin-bottom: 4px; }
+    .form-field input, .form-field select {
+      width: 100%; padding: 6px 8px; font-size: 13px;
+      border: 1px solid #ccc; border-radius: 4px; font-family: inherit;
+    }
+    .form-field input[type="color"] { padding: 0; height: 34px; }
+    .hex-row { display: flex; gap: 6px; }
+    .hex-row input[type="text"] { flex: 1; font-family: 'Consolas', monospace; }
+    .hex-row input[type="color"] { width: 40px; flex-shrink: 0; }
+    .modal-footer {
+      padding: 12px 20px; border-top: 1px solid #eee;
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+    .error { color: #dc2626; font-size: 12px; margin-top: 4px; }
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #10b981; color: #fff; padding: 10px 20px; border-radius: 6px;
+      font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .status-badge {
+      font-size: 10px; padding: 2px 8px; border-radius: 10px;
+      display: inline-block; margin-left: 6px;
+    }
+    .status-badge.active { background: #dcfce7; color: #166534; }
+    .status-badge.discontinued { background: #f5f5f5; color: #666; }
+    .empty {
+      text-align: center; padding: 60px 20px; color: #999; font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>パレット管理</h1>
+    <p class="subtitle">色の追加・廃盤切替を行います。既存のコレクションデータには影響しません。</p>
+
+    <div class="toolbar">
+      <div class="filter-tabs">
+        <button class="btn active" data-filter="all" onclick="setFilter('all')">すべて</button>
+        <button class="btn" data-filter="active" onclick="setFilter('active')">販売中</button>
+        <button class="btn" data-filter="discontinued" onclick="setFilter('discontinued')">廃盤</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-primary btn-large" onclick="showAdd()">+ 色を追加</button>
+    </div>
+
+    <div id="grid" class="grid">
+      <div class="empty">読み込み中…</div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="modal-backdrop" style="display:none" onclick="hideModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2 id="modal-title">色を追加</h2>
+        <button class="modal-close" onclick="hideModal()">×</button>
+      </div>
+      <form onsubmit="onSubmit(event)">
+        <div class="modal-body">
+          <div class="form-field">
+            <label>ID (半角英数, _)</label>
+            <input type="text" id="f-id" required placeholder="例: sepia">
+          </div>
+          <div class="form-field">
+            <label>名前</label>
+            <input type="text" id="f-name" required placeholder="例: セピア">
+          </div>
+          <div class="form-field">
+            <label>色</label>
+            <div class="hex-row">
+              <input type="text" id="f-hex" required placeholder="#5a3a20" pattern="^#[0-9a-fA-F]{6}$">
+              <input type="color" id="f-color" value="#c0c0c0" oninput="document.getElementById('f-hex').value=this.value">
+            </div>
+          </div>
+          <div class="form-field">
+            <label>カテゴリ</label>
+            <select id="f-category">
+              <option value="solid">solid (不透明)</option>
+              <option value="milky">milky (乳白)</option>
+              <option value="clear">clear (透明)</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>販売場所 (カンマ区切り)</label>
+            <input type="text" id="f-locations" value="lab,ankora,bungujoshi">
+          </div>
+          <div class="form-field">
+            <label>表示順 (数値)</label>
+            <input type="number" id="f-sortOrder" value="500">
+          </div>
+          <div class="form-field">
+            <label>備考 (任意)</label>
+            <input type="text" id="f-note" placeholder="イベント名など">
+          </div>
+          <div id="form-error" class="error" style="display:none"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" onclick="hideModal()">キャンセル</button>
+          <button type="submit" class="btn btn-primary" id="submit-btn">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <script>
+    let allColors = [];
+    let currentFilter = 'all';
+    let editingId = null;
+
+    function load() {
+      google.script.run
+        .withSuccessHandler(function(c) { allColors = c || []; render(); })
+        .withFailureHandler(onError)
+        .apiListColors();
+    }
+
+    function setFilter(f) {
+      currentFilter = f;
+      document.querySelectorAll('.filter-tabs .btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.filter === f);
+      });
+      render();
+    }
+
+    function render() {
+      const grid = document.getElementById('grid');
+      const items = allColors.filter(function(c) {
+        if (currentFilter === 'active') return c.status === 'ACTIVE';
+        if (currentFilter === 'discontinued') return c.status === 'DISCONTINUED';
+        return true;
+      });
+      if (items.length === 0) {
+        grid.innerHTML = '<div class="empty" style="grid-column:1/-1">該当する色がありません</div>';
+        return;
+      }
+      grid.innerHTML = items.map(function(c) {
+        const isDisc = c.status === 'DISCONTINUED';
+        return '<div class="card ' + (isDisc ? 'discontinued' : '') + '">' +
+          '<div class="chip" style="background:' + escapeAttr(c.hex) + '"></div>' +
+          '<div class="card-body">' +
+            '<button class="card-name" onclick="showEdit(\'' + escapeAttr(c.id) + '\')">' + escapeHtml(c.name) + '</button>' +
+            '<div class="card-meta">' + escapeHtml(c.id) + ' · ' + escapeHtml(c.category) +
+              '<span class="status-badge ' + (isDisc ? 'discontinued' : 'active') + '">' + (isDisc ? '廃盤' : '販売中') + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="card-actions">' +
+            '<button class="btn" onclick="toggleStatus(\'' + escapeAttr(c.id) + '\',\'' + c.status + '\')">' +
+              (isDisc ? '販売中に戻す' : '廃盤にする') +
+            '</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function toggleStatus(id, status) {
+      const next = status === 'ACTIVE' ? 'DISCONTINUED' : 'ACTIVE';
+      google.script.run
+        .withSuccessHandler(function() { load(); showToast('更新しました'); })
+        .withFailureHandler(onError)
+        .apiUpdateColorStatus(id, next);
+    }
+
+    function showAdd() {
+      editingId = null;
+      document.getElementById('modal-title').textContent = '色を追加';
+      document.getElementById('f-id').disabled = false;
+      document.getElementById('f-id').value = '';
+      document.getElementById('f-name').value = '';
+      document.getElementById('f-hex').value = '#c0c0c0';
+      document.getElementById('f-color').value = '#c0c0c0';
+      document.getElementById('f-category').value = 'solid';
+      document.getElementById('f-locations').value = 'lab,ankora,bungujoshi';
+      document.getElementById('f-sortOrder').value = 500;
+      document.getElementById('f-note').value = '';
+      hideError();
+      document.getElementById('modal').style.display = 'flex';
+    }
+
+    function showEdit(id) {
+      const c = allColors.find(function(x) { return x.id === id; });
+      if (!c) return;
+      editingId = id;
+      document.getElementById('modal-title').textContent = '色を編集: ' + c.name;
+      document.getElementById('f-id').value = c.id;
+      document.getElementById('f-id').disabled = true;
+      document.getElementById('f-name').value = c.name;
+      document.getElementById('f-hex').value = c.hex;
+      document.getElementById('f-color').value = c.hex;
+      document.getElementById('f-category').value = c.category;
+      document.getElementById('f-locations').value = (c.locations || []).join(',');
+      document.getElementById('f-sortOrder').value = c.sortOrder || 0;
+      document.getElementById('f-note').value = c.note || '';
+      hideError();
+      document.getElementById('modal').style.display = 'flex';
+    }
+
+    function hideModal(e) {
+      if (e && e.target !== e.currentTarget) return;
+      document.getElementById('modal').style.display = 'none';
+      editingId = null;
+    }
+
+    function onSubmit(e) {
+      e.preventDefault();
+      hideError();
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true; btn.textContent = '保存中…';
+      const input = {
+        id: document.getElementById('f-id').value.trim(),
+        name: document.getElementById('f-name').value.trim(),
+        hex: document.getElementById('f-hex').value.trim(),
+        category: document.getElementById('f-category').value,
+        status: 'ACTIVE',
+        sortOrder: Number(document.getElementById('f-sortOrder').value),
+        locations: document.getElementById('f-locations').value.split(',').map(function(s){return s.trim();}).filter(function(s){return s;}),
+        note: document.getElementById('f-note').value.trim(),
+      };
+      google.script.run
+        .withSuccessHandler(function() {
+          btn.disabled = false; btn.textContent = '保存';
+          hideModal();
+          load();
+          showToast(editingId ? '更新しました' : '追加しました');
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false; btn.textContent = '保存';
+          showError(err.message || String(err));
+        })
+        .apiUpsertColor(input);
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('form-error');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+    function hideError() { document.getElementById('form-error').style.display = 'none'; }
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.display = 'block';
+      setTimeout(function() { t.style.display = 'none'; }, 2500);
+    }
+    function onError(err) { alert('エラー: ' + (err.message || err)); }
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    load();
+  </script>
+</body>
+</html>
