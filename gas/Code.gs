@@ -21,6 +21,42 @@
  *   resetSheets(confirm) — 全消去 + 初期化 (引数に文字列 'CONFIRM_RESET' 必須)
  */
 
+// ============================================================
+// Sheets カスタムメニュー (スプレッドシートを開いたときに自動追加)
+// ============================================================
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('万年筆buffet')
+    .addItem('パレット管理を開く', 'showPaletteSidebar')
+    .addSeparator()
+    .addItem('初期セットアップ (initializeSheets)', 'initializeSheets')
+    .addItem('マイグレーション (migrateSheets)', 'migrateSheets')
+    .addToUi();
+}
+
+function showPaletteSidebar() {
+  const html = HtmlService.createHtmlOutputFromFile('PaletteSidebar')
+    .setTitle('パレット管理')
+    .setWidth(360);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+// サイドバー HTML から呼ばれるサーバー関数 (google.script.run 用)
+function apiListColors() {
+  return readAllColors();
+}
+function apiUpsertColor(input) {
+  return upsertColor(input);
+}
+function apiUpdateColorStatus(id, status) {
+  return updateColorStatus({ id: id, status: status });
+}
+
+// ============================================================
+// 定数
+// ============================================================
+
 const PART_TYPES = ['cap_top', 'cap', 'grip', 'barrel', 'barrel_end'];
 const PART_PREFIX = { cap_top: 'ct', cap: 'c', grip: 'g', barrel: 'b', barrel_end: 'be' };
 

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      margin: 0;
+      padding: 12px;
+      color: #333;
+    }
+    h2 { font-size: 15px; margin: 0 0 8px; }
+    .row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid #eee; }
+    .chip { width: 20px; height: 20px; border-radius: 50%; border: 1px solid #ccc; flex-shrink: 0; }
+    .name { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status { font-size: 10px; padding: 2px 6px; border-radius: 10px; }
+    .active { background: #e0f2fe; color: #0369a1; }
+    .discontinued { background: #f5f5f5; color: #888; }
+    .btn {
+      font-size: 11px;
+      padding: 3px 8px;
+      border: 1px solid #ccc;
+      background: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn:hover { background: #f5f5f5; }
+    .btn-primary {
+      background: #4f46e5;
+      color: #fff;
+      border-color: #4f46e5;
+    }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-full { width: 100%; padding: 8px; margin-top: 12px; font-size: 13px; }
+    form { margin-top: 12px; }
+    label { display: block; margin-bottom: 6px; }
+    label span { display: block; font-size: 11px; color: #666; margin-bottom: 2px; }
+    input, select, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 4px 6px;
+      font-size: 12px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+    input[type="color"] { padding: 0; height: 30px; }
+    .hex-row { display: flex; gap: 6px; align-items: end; }
+    .hex-row input[type="text"] { flex: 1; font-family: monospace; }
+    .hex-row input[type="color"] { width: 40px; flex-shrink: 0; }
+    .filter-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+    .filter-tabs .btn { flex: 1; text-align: center; }
+    .filter-tabs .btn.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+    .error { color: #b91c1c; font-size: 11px; margin-top: 4px; }
+    .list-container { max-height: 400px; overflow-y: auto; margin-top: 8px; }
+    #form-container { border-top: 2px solid #4f46e5; margin-top: 16px; padding-top: 12px; }
+    .hidden { display: none; }
+    .msg { font-size: 12px; color: #059669; margin-top: 8px; text-align: center; }
+  </style>
+</head>
+<body>
+  <h2>パレット管理</h2>
+
+  <div class="filter-tabs">
+    <button class="btn active" data-filter="all" onclick="setFilter('all')">すべて</button>
+    <button class="btn" data-filter="active" onclick="setFilter('active')">販売中</button>
+    <button class="btn" data-filter="discontinued" onclick="setFilter('discontinued')">廃盤</button>
+  </div>
+
+  <div id="list" class="list-container">
+    <div style="color: #999; text-align: center; padding: 20px;">読み込み中…</div>
+  </div>
+
+  <button class="btn btn-primary btn-full" onclick="showForm()">+ 色を追加</button>
+
+  <div id="form-container" class="hidden">
+    <form onsubmit="onSubmit(event)">
+      <h2 id="form-title">色を追加</h2>
+      <label><span>ID (半角英数字, _)</span>
+        <input type="text" id="f-id" required placeholder="例: sepia">
+      </label>
+      <label><span>名前</span>
+        <input type="text" id="f-name" required placeholder="例: セピア">
+      </label>
+      <label><span>色</span>
+        <div class="hex-row">
+          <input type="text" id="f-hex" required placeholder="#5a3a20" pattern="^#[0-9a-fA-F]{6}$">
+          <input type="color" id="f-color" value="#5a3a20" oninput="document.getElementById('f-hex').value=this.value">
+        </div>
+      </label>
+      <label><span>カテゴリ</span>
+        <select id="f-category">
+          <option value="solid">solid (不透明)</option>
+          <option value="milky">milky (乳白)</option>
+          <option value="clear">clear (透明)</option>
+        </select>
+      </label>
+      <label><span>販売店舗 (カンマ区切り)</span>
+        <input type="text" id="f-locations" value="lab,ankora,bungujoshi">
+      </label>
+      <label><span>表示順 (数値)</span>
+        <input type="number" id="f-sortOrder" value="500">
+      </label>
+      <label><span>備考</span>
+        <input type="text" id="f-note" placeholder="イベント名など (任意)">
+      </label>
+      <div id="form-error" class="error hidden"></div>
+      <div style="display: flex; gap: 6px; margin-top: 8px;">
+        <button type="button" class="btn" style="flex:1" onclick="hideForm()">キャンセル</button>
+        <button type="submit" class="btn btn-primary" style="flex:1" id="submit-btn">保存</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="msg" class="msg hidden"></div>
+
+  <script>
+    let allColors = [];
+    let currentFilter = 'all';
+    let editingId = null;
+
+    function load() {
+      google.script.run
+        .withSuccessHandler(onColorsLoaded)
+        .withFailureHandler(onError)
+        .apiListColors();
+    }
+
+    function onColorsLoaded(colors) {
+      allColors = colors || [];
+      render();
+    }
+
+    function setFilter(f) {
+      currentFilter = f;
+      document.querySelectorAll('.filter-tabs .btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.filter === f);
+      });
+      render();
+    }
+
+    function render() {
+      const list = document.getElementById('list');
+      const filtered = allColors.filter(function(c) {
+        if (currentFilter === 'active') return c.status === 'ACTIVE';
+        if (currentFilter === 'discontinued') return c.status === 'DISCONTINUED';
+        return true;
+      });
+      if (filtered.length === 0) {
+        list.innerHTML = '<div style="color:#999;text-align:center;padding:20px;">該当なし</div>';
+        return;
+      }
+      list.innerHTML = filtered.map(function(c) {
+        const isDisc = c.status === 'DISCONTINUED';
+        return '<div class="row">' +
+          '<div class="chip" style="background:' + escapeAttr(c.hex) + '"></div>' +
+          '<div class="name" title="' + escapeAttr(c.id) + '">' + escapeHtml(c.name) + '</div>' +
+          '<span class="status ' + (isDisc ? 'discontinued' : 'active') + '">' +
+            (isDisc ? '廃盤' : '販売中') +
+          '</span>' +
+          '<button class="btn" onclick="editColor(\'' + escapeAttr(c.id) + '\')">編集</button>' +
+          '<button class="btn" onclick="toggleStatus(\'' + escapeAttr(c.id) + '\',\'' + c.status + '\')">' +
+            (isDisc ? '復活' : '廃盤') +
+          '</button>' +
+          '</div>';
+      }).join('');
+    }
+
+    function toggleStatus(id, currentStatus) {
+      const newStatus = currentStatus === 'ACTIVE' ? 'DISCONTINUED' : 'ACTIVE';
+      google.script.run
+        .withSuccessHandler(function() { load(); showMsg('更新しました'); })
+        .withFailureHandler(onError)
+        .apiUpdateColorStatus(id, newStatus);
+    }
+
+    function showForm() {
+      editingId = null;
+      document.getElementById('form-title').textContent = '色を追加';
+      document.getElementById('f-id').disabled = false;
+      document.getElementById('f-id').value = '';
+      document.getElementById('f-name').value = '';
+      document.getElementById('f-hex').value = '#c0c0c0';
+      document.getElementById('f-color').value = '#c0c0c0';
+      document.getElementById('f-category').value = 'solid';
+      document.getElementById('f-locations').value = 'lab,ankora,bungujoshi';
+      document.getElementById('f-sortOrder').value = 500;
+      document.getElementById('f-note').value = '';
+      hideError();
+      document.getElementById('form-container').classList.remove('hidden');
+    }
+
+    function editColor(id) {
+      const c = allColors.find(function(x) { return x.id === id; });
+      if (!c) return;
+      editingId = id;
+      document.getElementById('form-title').textContent = '色を編集: ' + c.name;
+      document.getElementById('f-id').value = c.id;
+      document.getElementById('f-id').disabled = true;
+      document.getElementById('f-name').value = c.name;
+      document.getElementById('f-hex').value = c.hex;
+      document.getElementById('f-color').value = c.hex;
+      document.getElementById('f-category').value = c.category;
+      document.getElementById('f-locations').value = (c.locations || []).join(',');
+      document.getElementById('f-sortOrder').value = c.sortOrder || 0;
+      document.getElementById('f-note').value = c.note || '';
+      hideError();
+      document.getElementById('form-container').classList.remove('hidden');
+    }
+
+    function hideForm() {
+      document.getElementById('form-container').classList.add('hidden');
+      editingId = null;
+    }
+
+    function onSubmit(e) {
+      e.preventDefault();
+      hideError();
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = '保存中…';
+      const input = {
+        id: document.getElementById('f-id').value.trim(),
+        name: document.getElementById('f-name').value.trim(),
+        hex: document.getElementById('f-hex').value.trim(),
+        category: document.getElementById('f-category').value,
+        status: 'ACTIVE',
+        sortOrder: Number(document.getElementById('f-sortOrder').value),
+        locations: document.getElementById('f-locations').value.split(',').map(function(s){return s.trim();}).filter(function(s){return s;}),
+        note: document.getElementById('f-note').value.trim(),
+      };
+      google.script.run
+        .withSuccessHandler(function() {
+          btn.disabled = false;
+          btn.textContent = '保存';
+          hideForm();
+          load();
+          showMsg(editingId ? '更新しました' : '追加しました');
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          btn.textContent = '保存';
+          showError(err.message || String(err));
+        })
+        .apiUpsertColor(input);
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('form-error');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function hideError() {
+      document.getElementById('form-error').classList.add('hidden');
+    }
+
+    function showMsg(msg) {
+      const el = document.getElementById('msg');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      setTimeout(function() { el.classList.add('hidden'); }, 2000);
+    }
+
+    function onError(err) {
+      alert('エラー: ' + (err.message || err));
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function escapeAttr(s) {
+      return escapeHtml(s);
+    }
+
+    load();
+  </script>
+</body>
+</html>
