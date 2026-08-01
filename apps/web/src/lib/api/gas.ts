@@ -1,5 +1,6 @@
 import type {
   Collection,
+  ColorStatus,
   ColorSwatch,
   ColorsFilter,
   InventoryEntry,
@@ -7,7 +8,13 @@ import type {
   NewCollection,
   Part,
 } from '@/types/domain';
-import { ApiError, type ApiClient, type ApiResponse, type PartsFilter } from './types';
+import {
+  ApiError,
+  type ApiClient,
+  type ApiResponse,
+  type ColorUpsertInput,
+  type PartsFilter,
+} from './types';
 
 // GAS Web App は CORS プリフライトを扱えないため text/plain で送る。
 // GAS 側は e.postData.contents を JSON.parse するので body 形式は同じ。
@@ -33,6 +40,9 @@ export function createGasApiClient(config: GasClientConfig): ApiClient {
   return {
     colors: {
       list: (filter?: ColorsFilter) => c<ColorSwatch[]>('colors.list', filter ?? {}),
+      upsert: (input: ColorUpsertInput) => c<ColorSwatch>('colors.upsert', input),
+      updateStatus: (id: string, status: ColorStatus) =>
+        c<void>('colors.updateStatus', { id, status }),
     },
     parts: {
       list: (filter?: PartsFilter) => c<Part[]>('parts.list', filter ?? {}),

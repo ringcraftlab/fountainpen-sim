@@ -1,5 +1,6 @@
 import type {
   Collection,
+  ColorStatus,
   ColorSwatch,
   ColorsFilter,
   InventoryEntry,
@@ -19,8 +20,14 @@ export interface PartsApi {
   list(filter?: PartsFilter): Promise<Part[]>;
 }
 
+/** 色の追加/更新入力 (id 必須。既存 id なら update、無ければ insert) */
+export type ColorUpsertInput = Omit<ColorSwatch, 'sortOrder' | 'locations' | 'note'> &
+  Partial<Pick<ColorSwatch, 'sortOrder' | 'locations' | 'note'>>;
+
 export interface ColorsApi {
   list(filter?: ColorsFilter): Promise<ColorSwatch[]>;
+  upsert(input: ColorUpsertInput): Promise<ColorSwatch>;
+  updateStatus(id: string, status: ColorStatus): Promise<void>;
 }
 
 export interface CollectionsApi {

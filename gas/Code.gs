@@ -1,23 +1,40 @@
 /**
  * Fountain Pen Buffet Simulator — GAS Web App
  *
- * データモデル (2026-08 リファクタ):
+ * 設計原則 (2026-08 リファクタ):
+ *   1. 初期化 (initializeSheets) と マイグレーション (migrateSheets) と
+ *      リセット (resetSheets) は完全に分離
+ *   2. データ破壊操作は明示的な確認引数が必要
+ *   3. ユーザー操作 (色追加/廃盤) は追記/更新のみ、既存データは触らない
+ *   4. マイグレーションは冪等 (idempotent)、既存データを保全
+ *
+ * データモデル:
  *   colors シート: 1色 = 1行 (id / name / hex / category / status / sortOrder / locations / note)
- *   parts はサーバー側で colors × 5パーツタイプ から派生生成
+ *   parts はサーバー側で colors × 5パーツタイプ から派生生成 (DBには持たない)
  *
  * エントリ:
  *   doPost(e) → JSON {action, params} → JSON {ok, data|error}
  *
- * 初期セットアップ:
- *   1) 空の Google Sheets を作成
- *   2) 拡張機能 → Apps Script でこのファイルをコピペ
- *   3) 関数 `setupSheets` を実行 → colors / collections / inventory / locations の4シート作成
- *   4) デプロイ → ウェブアプリ (アクセス: 全員)
- *   5) デプロイURLを React の VITE_GAS_ENDPOINT に設定
+ * 管理者用関数 (Apps Script エディタから直接実行):
+ *   initializeSheets()   — 空スプシに初期構築 (既にシートがあれば拒否)
+ *   migrateSheets()      — 冪等、既存データ保全、不足シート追加のみ
+ *   resetSheets(confirm) — 全消去 + 初期化 (引数に文字列 'CONFIRM_RESET' 必須)
  */
 
 const PART_TYPES = ['cap_top', 'cap', 'grip', 'barrel', 'barrel_end'];
 const PART_PREFIX = { cap_top: 'ct', cap: 'c', grip: 'g', barrel: 'b', barrel_end: 'be' };
+
+const SHEET_COLORS = 'colors';
+const SHEET_COLLECTIONS = 'collections';
+const SHEET_INVENTORY = 'inventory';
+const SHEET_LOCATIONS = 'locations';
+
+const HEADERS = {
+  colors:      ['id', 'name', 'hex', 'category', 'status', 'sortOrder', 'locations', 'note'],
+  collections: ['id', 'name', 'parts_json', 'metalColor', 'kind', 'comment', 'createdAt'],
+  inventory:   ['partId', 'owned', 'wishlist'],
+  locations:   ['id', 'name', 'active'],
+};
 
 // ============================================================
 // エントリポイント
@@ -48,21 +65,23 @@ function jsonResponse(obj) {
   );
 }
 
-// ============================================================
-// ルーター
-// ============================================================
-
 function route(action, params) {
   switch (action) {
+    // 読み取り
     case 'colors.list':         return listColors(params);
     case 'parts.list':          return listParts(params);
     case 'parts.get':           return getPart(params);
     case 'collections.list':    return listCollections();
+    case 'inventory.list':      return listInventory();
+    case 'locations.list':      return listLocations();
+
+    // 書き込み (追加/更新のみ、破壊操作なし)
+    case 'colors.upsert':       return upsertColor(params);
+    case 'colors.updateStatus': return updateColorStatus(params);
     case 'collections.create':  return createCollection(params);
     case 'collections.delete':  return deleteCollection(params);
-    case 'inventory.list':      return listInventory();
     case 'inventory.upsert':    return upsertInventory(params);
-    case 'locations.list':      return listLocations();
+
     default:
       throw makeError('unknown_action', 'Unknown action: ' + action);
   }
@@ -80,7 +99,7 @@ function makeError(code, message) {
 
 function sheet(name) {
   const s = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
-  if (!s) throw makeError('sheet_not_found', 'Sheet not found: ' + name);
+  if (!s) throw makeError('sheet_not_found', 'Sheet not found: ' + name + '. Run migrateSheets() first.');
   return s;
 }
 
@@ -118,11 +137,13 @@ function findRowIndex(sheetName, key, value) {
   return -1;
 }
 
-function deleteRowByKey(sheetName, key, value) {
-  const rowNum = findRowIndex(sheetName, key, value);
-  if (rowNum < 0) return false;
-  sheet(sheetName).deleteRow(rowNum);
-  return true;
+function updateRow(sheetName, key, obj) {
+  const s = sheet(sheetName);
+  const header = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
+  const rowNum = findRowIndex(sheetName, key, obj[key]);
+  if (rowNum < 0) throw makeError('not_found', 'Row not found: ' + key + '=' + obj[key]);
+  const row = header.map(function (h) { return obj[h] !== undefined ? obj[h] : ''; });
+  s.getRange(rowNum, 1, 1, header.length).setValues([row]);
 }
 
 function upsertRow(sheetName, key, obj) {
@@ -137,12 +158,19 @@ function upsertRow(sheetName, key, obj) {
   }
 }
 
+function deleteRowByKey(sheetName, key, value) {
+  const rowNum = findRowIndex(sheetName, key, value);
+  if (rowNum < 0) return false;
+  sheet(sheetName).deleteRow(rowNum);
+  return true;
+}
+
 // ============================================================
-// Colors
+// Colors (読み書き)
 // ============================================================
 
 function readAllColors() {
-  const { rows } = readAll('colors');
+  const { rows } = readAll(SHEET_COLORS);
   return rows.map(rowToColor).sort(function (a, b) {
     return (a.sortOrder || 0) - (b.sortOrder || 0);
   });
@@ -154,6 +182,48 @@ function listColors(params) {
     if (params.locationId && c.locations.indexOf(params.locationId) < 0) return false;
     return true;
   });
+}
+
+/** 色を1件追加または更新。 id 必須。既存データ・他色に影響なし。 */
+function upsertColor(params) {
+  if (!params.id) throw makeError('validation', 'id is required');
+  if (!params.name) throw makeError('validation', 'name is required');
+  if (!params.hex) throw makeError('validation', 'hex is required');
+  const category = params.category || 'solid';
+  if (['solid', 'milky', 'clear'].indexOf(category) < 0) {
+    throw makeError('validation', 'category must be solid/milky/clear');
+  }
+  const status = params.status || 'ACTIVE';
+  if (['ACTIVE', 'DISCONTINUED'].indexOf(status) < 0) {
+    throw makeError('validation', 'status must be ACTIVE/DISCONTINUED');
+  }
+  const record = {
+    id: String(params.id),
+    name: String(params.name),
+    hex: String(params.hex),
+    category: category,
+    status: status,
+    sortOrder: Number(params.sortOrder || 0),
+    locations: (params.locations || []).join(','),
+    note: String(params.note || ''),
+  };
+  upsertRow(SHEET_COLORS, 'id', record);
+  return rowToColor(record);
+}
+
+/** 色の status を切り替える (廃盤化/復活) 専用。他フィールドには触れない。 */
+function updateColorStatus(params) {
+  if (!params.id) throw makeError('validation', 'id is required');
+  if (['ACTIVE', 'DISCONTINUED'].indexOf(params.status) < 0) {
+    throw makeError('validation', 'status must be ACTIVE/DISCONTINUED');
+  }
+  const rowNum = findRowIndex(SHEET_COLORS, 'id', params.id);
+  if (rowNum < 0) throw makeError('not_found', 'Color not found: ' + params.id);
+  const s = sheet(SHEET_COLORS);
+  const header = s.getRange(1, 1, 1, s.getLastColumn()).getValues()[0];
+  const statusCol = header.indexOf('status') + 1;
+  s.getRange(rowNum, statusCol).setValue(params.status);
+  return { id: params.id, status: params.status };
 }
 
 function rowToColor(row) {
@@ -170,7 +240,7 @@ function rowToColor(row) {
 }
 
 // ============================================================
-// Parts (colors × types から派生)
+// Parts (colors × types から派生、DBには格納しない)
 // ============================================================
 
 function partsFromColors(colors) {
@@ -195,8 +265,7 @@ function partsFromColors(colors) {
 }
 
 function listParts(params) {
-  const colors = readAllColors();
-  return partsFromColors(colors).filter(function (p) {
+  return partsFromColors(readAllColors()).filter(function (p) {
     if (params.type && p.type !== params.type) return false;
     if (params.availableOnly && !p.currentAvailable) return false;
     if (params.locationId && p.locations.indexOf(params.locationId) < 0) return false;
@@ -205,8 +274,7 @@ function listParts(params) {
 }
 
 function getPart(params) {
-  const parts = partsFromColors(readAllColors());
-  const found = parts.filter(function (p) { return p.id === params.id; })[0];
+  const found = partsFromColors(readAllColors()).filter(function (p) { return p.id === params.id; })[0];
   if (!found) throw makeError('not_found', 'Part not found: ' + params.id);
   return found;
 }
@@ -216,30 +284,28 @@ function getPart(params) {
 // ============================================================
 
 function listCollections() {
-  const { rows } = readAll('collections');
+  const { rows } = readAll(SHEET_COLLECTIONS);
   return rows.map(rowToCollection).sort(function (a, b) {
     return b.createdAt < a.createdAt ? -1 : b.createdAt > a.createdAt ? 1 : 0;
   });
 }
 
 function createCollection(params) {
-  const id = 'col-' + Date.now();
-  const createdAt = new Date().toISOString();
   const record = {
-    id: id,
+    id: 'col-' + Date.now(),
     name: String(params.name || ''),
     parts_json: JSON.stringify(params.parts || {}),
     metalColor: String(params.metalColor || 'gold'),
     kind: String(params.kind || 'owned'),
     comment: String(params.comment || ''),
-    createdAt: createdAt,
+    createdAt: new Date().toISOString(),
   };
-  appendRow('collections', record);
+  appendRow(SHEET_COLLECTIONS, record);
   return rowToCollection(record);
 }
 
 function deleteCollection(params) {
-  deleteRowByKey('collections', 'id', params.id);
+  deleteRowByKey(SHEET_COLLECTIONS, 'id', params.id);
   return null;
 }
 
@@ -258,11 +324,11 @@ function rowToCollection(row) {
 }
 
 // ============================================================
-// Inventory
+// Inventory / Locations
 // ============================================================
 
 function listInventory() {
-  const { rows } = readAll('inventory');
+  const { rows } = readAll(SHEET_INVENTORY);
   return rows.map(function (row) {
     return {
       partId: String(row.partId),
@@ -273,7 +339,7 @@ function listInventory() {
 }
 
 function upsertInventory(params) {
-  upsertRow('inventory', 'partId', {
+  upsertRow(SHEET_INVENTORY, 'partId', {
     partId: params.partId,
     owned: params.owned ? 'TRUE' : 'FALSE',
     wishlist: params.wishlist ? 'TRUE' : 'FALSE',
@@ -281,12 +347,8 @@ function upsertInventory(params) {
   return null;
 }
 
-// ============================================================
-// Locations
-// ============================================================
-
 function listLocations() {
-  const { rows } = readAll('locations');
+  const { rows } = readAll(SHEET_LOCATIONS);
   return rows.map(function (row) {
     return {
       id: String(row.id),
@@ -297,25 +359,99 @@ function listLocations() {
 }
 
 // ============================================================
-// セットアップ: colors シートに 23色を投入、parts シートは廃止
+// 管理系: 初期化 / マイグレーション / リセット (完全分離)
 // ============================================================
 
 /**
- * 初回セットアップ (既存データは保全)。
- *   - 各シートは「無ければ作成 + 種データ投入」、有れば触らない
- *   - 旧 parts シートは検出したら削除
- * 完全リセットしたい場合は resetSheets() を使用
+ * 【初期化】空のスプレッドシートに初期構築する。
+ * 既存シートがあれば拒否する (安全ガード)。
+ * このアプリを新しいスプレッドシートに導入するときだけ使う。
  */
-function setupSheets() {
+function initializeSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const existing = [SHEET_COLORS, SHEET_COLLECTIONS, SHEET_INVENTORY, SHEET_LOCATIONS]
+    .filter(function (name) { return ss.getSheetByName(name); });
+  if (existing.length > 0) {
+    throw makeError(
+      'already_initialized',
+      '初期化拒否: シートが既に存在します [' + existing.join(', ') + ']。' +
+      ' 既存プロジェクトなら migrateSheets() を使ってください。' +
+      ' 完全リセットしたいなら resetSheets("CONFIRM_RESET") を使ってください。',
+    );
+  }
+  createColorsSheetWithSeed(ss);
+  createCollectionsSheet(ss);
+  createInventorySheet(ss);
+  createLocationsSheetWithSeed(ss);
+  Logger.log('initializeSheets: 初期化完了 (colors 23色 + locations 3件)');
+}
 
-  // --- colors (既存があればスキップ) ---
-  let s = ss.getSheetByName('colors');
-  const seedColors = !s;
-  if (!s) s = ss.insertSheet('colors');
-  if (seedColors) {
-    s.appendRow(['id', 'name', 'hex', 'category', 'status', 'sortOrder', 'locations', 'note']);
+/**
+ * 【マイグレーション】冪等、既存データを保全。
+ * 不足しているシートがあれば追加、既存シートには一切触れない。
+ * 何度実行しても安全。バージョンアップ時にも実行する。
+ */
+function migrateSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const created = [];
 
+  if (!ss.getSheetByName(SHEET_COLORS)) {
+    createColorsSheetWithSeed(ss);
+    created.push(SHEET_COLORS + ' (種色投入)');
+  }
+  if (!ss.getSheetByName(SHEET_COLLECTIONS)) {
+    createCollectionsSheet(ss);
+    created.push(SHEET_COLLECTIONS);
+  }
+  if (!ss.getSheetByName(SHEET_INVENTORY)) {
+    createInventorySheet(ss);
+    created.push(SHEET_INVENTORY);
+  }
+  if (!ss.getSheetByName(SHEET_LOCATIONS)) {
+    createLocationsSheetWithSeed(ss);
+    created.push(SHEET_LOCATIONS + ' (種データ投入)');
+  }
+
+  // 旧 parts シートを削除 (存在すれば)
+  const oldParts = ss.getSheetByName('parts');
+  if (oldParts) {
+    ss.deleteSheet(oldParts);
+    Logger.log('migrateSheets: 旧 parts シートを削除');
+  }
+
+  if (created.length === 0) {
+    Logger.log('migrateSheets: 変更なし (全シート存在)');
+  } else {
+    Logger.log('migrateSheets: 追加シート = [' + created.join(', ') + ']');
+  }
+}
+
+/**
+ * 【リセット】全シートを削除して再初期化する破壊的操作。
+ * 引数に文字列 'CONFIRM_RESET' が必要。開発時のみ使用。
+ * 例: resetSheets('CONFIRM_RESET')
+ */
+function resetSheets(confirmation) {
+  if (confirmation !== 'CONFIRM_RESET') {
+    throw makeError(
+      'confirmation_required',
+      'resetSheets は破壊的です。実行するには resetSheets("CONFIRM_RESET") を呼んでください。',
+    );
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  [SHEET_COLORS, SHEET_COLLECTIONS, SHEET_INVENTORY, SHEET_LOCATIONS, 'parts'].forEach(function (name) {
+    const s = ss.getSheetByName(name);
+    if (s) ss.deleteSheet(s);
+  });
+  initializeSheets();
+  Logger.log('resetSheets: 全リセット完了');
+}
+
+// --- ヘルパ: 各シートの作成 (単体、他に影響なし) ---
+
+function createColorsSheetWithSeed(ss) {
+  const s = ss.insertSheet(SHEET_COLORS);
+  s.appendRow(HEADERS.colors);
   const PALETTE = [
     ['clear',          'クリア',             '#e5e7eb', 'clear'],
     ['black',          'ブラック',           '#2b2b30', 'solid'],
@@ -350,52 +486,29 @@ function setupSheets() {
     'ankora',
     'bungujoshi',
   ];
-    const rows = PALETTE.map(function (p, i) {
-      return [p[0], p[1], p[2], p[3], 'ACTIVE', (i + 1) * 10, LOC_PATTERNS[i % LOC_PATTERNS.length], ''];
-    });
-    s.getRange(2, 1, rows.length, 8).setValues(rows);
-  }
-
-  // --- collections (既存維持) ---
-  if (!ss.getSheetByName('collections')) {
-    s = ss.insertSheet('collections');
-    s.appendRow(['id', 'name', 'parts_json', 'metalColor', 'kind', 'comment', 'createdAt']);
-  }
-
-  // --- inventory (既存維持) ---
-  if (!ss.getSheetByName('inventory')) {
-    s = ss.insertSheet('inventory');
-    s.appendRow(['partId', 'owned', 'wishlist']);
-  }
-
-  // --- locations (既存維持) ---
-  if (!ss.getSheetByName('locations')) {
-    s = ss.insertSheet('locations');
-    s.appendRow(['id', 'name', 'active']);
-    const locs = [
-      ['lab',        'Style Of Lab', true],
-      ['ankora',     'アンコーラ',   true],
-      ['bungujoshi', '文具女子博',   true],
-    ];
-    s.getRange(2, 1, locs.length, 3).setValues(locs);
-  }
-
-  // 旧 parts シートは廃止 (存在すれば削除)
-  const oldParts = ss.getSheetByName('parts');
-  if (oldParts) ss.deleteSheet(oldParts);
-
-  Logger.log('セットアップ完了 (既存データは保全): colors' + (seedColors ? ' 23色投入' : ' 既存維持') + ' / 旧 parts シート削除');
+  const rows = PALETTE.map(function (p, i) {
+    return [p[0], p[1], p[2], p[3], 'ACTIVE', (i + 1) * 10, LOC_PATTERNS[i % LOC_PATTERNS.length], ''];
+  });
+  s.getRange(2, 1, rows.length, HEADERS.colors.length).setValues(rows);
 }
 
-/**
- * 全シートをリセット (全データ消える)。
- * 開発時のみ使用。実行前に必ずバックアップを取ってください。
- */
-function resetSheets() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  ['colors', 'collections', 'inventory', 'locations', 'parts'].forEach(function (name) {
-    const s = ss.getSheetByName(name);
-    if (s) ss.deleteSheet(s);
-  });
-  setupSheets();
+function createCollectionsSheet(ss) {
+  const s = ss.insertSheet(SHEET_COLLECTIONS);
+  s.appendRow(HEADERS.collections);
+}
+
+function createInventorySheet(ss) {
+  const s = ss.insertSheet(SHEET_INVENTORY);
+  s.appendRow(HEADERS.inventory);
+}
+
+function createLocationsSheetWithSeed(ss) {
+  const s = ss.insertSheet(SHEET_LOCATIONS);
+  s.appendRow(HEADERS.locations);
+  const locs = [
+    ['lab',        'Style Of Lab', true],
+    ['ankora',     'アンコーラ',   true],
+    ['bungujoshi', '文具女子博',   true],
+  ];
+  s.getRange(2, 1, locs.length, HEADERS.locations.length).setValues(locs);
 }
