@@ -1,18 +1,15 @@
-import type {
-  Collection,
-  ColorSwatch,
-  InventoryEntry,
-  Location,
-  NewCollection,
-} from '@/types/domain';
+import type { Collection, InventoryEntry, NewCollection } from '@/types/domain';
 import type { ApiClient } from './types';
-import { filterColors, filterParts, partsFromColors } from './parts';
+import { createGasApiClient } from './gas';
 
 /**
- * LocalStorage ベースの ApiClient。
- * - collections: LocalStorage に配列で保存
- * - colors: seed を読み取り専用で提供 (追加/編集は管理者のみ = gas モード)
- * - inventory: 現状ドメイン外だが interface 実装のためスタブ
+ * ハイブリッド ApiClient (最終形):
+ *
+ *   - colors / locations / parts → GAS 経由で Sheets から取得 (マスタは Sheets)
+ *   - collections → LocalStorage (未ログインなので端末内)
+ *   - inventory → LocalStorage (使っていないが interface 用にスタブ)
+ *
+ * 将来ログイン機能を追加したら collections を user DB に切り替える。
  */
 
 const KEY_COLLECTIONS = 'fountain-pen-buffet.collections';
@@ -38,28 +35,17 @@ function writeCollections(items: Collection[]): void {
   }
 }
 
-interface LocalConfig {
-  colors: ColorSwatch[];
-  locations: Location[];
-}
-
-export function createLocalStorageApiClient({
-  colors,
-  locations,
-}: LocalConfig): ApiClient {
+export function createHybridApiClient(gasEndpoint: string): ApiClient {
+  const gas = createGasApiClient({ endpoint: gasEndpoint });
   const inventory = new Map<string, InventoryEntry>();
 
   return {
-    colors: {
-      async list(filter) {
-        return filterColors(colors, filter);
-      },
-    },
-    parts: {
-      async list(filter) {
-        return filterParts(partsFromColors(colors), filter);
-      },
-    },
+    // マスタ = Sheets
+    colors: gas.colors,
+    locations: gas.locations,
+    parts: gas.parts,
+
+    // 個人データ = 端末 (未ログイン想定)
     collections: {
       async list() {
         return readCollections();
@@ -80,17 +66,14 @@ export function createLocalStorageApiClient({
         writeCollections(items);
       },
     },
+
+    // 未使用スタブ
     inventory: {
       async list() {
         return Array.from(inventory.values());
       },
       async upsert(entry) {
         inventory.set(entry.partId, entry);
-      },
-    },
-    locations: {
-      async list() {
-        return [...locations];
       },
     },
   };
