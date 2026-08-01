@@ -1,17 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { Plus, X } from 'lucide-react';
 import type { ColorKind, ColorSwatch } from '@/types/domain';
 import { cn } from '@/lib/utils';
+import { isAdminMode } from '@/lib/api/provider';
 import { usePaletteStore } from '@/features/palette/store';
 import { useLocationsStore } from '@/lib/stores/locationsStore';
 
 /**
- * 色パレット管理ページ。
+ * 色パレット管理ページ (管理者専用: gas プロバイダ時のみ表示)。
  * - 既存色一覧 (廃盤含む)
  * - 廃盤トグル
  * - 新規色追加ダイアログ
  */
 export function PalettePage() {
+  // 管理者モード以外はシミュレーターへリダイレクト
+  if (!isAdminMode()) return <Navigate to="/simulator" replace />;
+
+  return <PaletteContent />;
+}
+
+function PaletteContent() {
   const { colors, loaded, loading, error, fetch, updateStatus } = usePaletteStore();
   const {
     loaded: locsLoaded,
