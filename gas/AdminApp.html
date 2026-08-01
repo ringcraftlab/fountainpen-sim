@@ -139,9 +139,9 @@
       </div>
       <form onsubmit="onSubmit(event)">
         <div class="modal-body">
-          <div class="form-field">
-            <label>ID (半角英数, _)</label>
-            <input type="text" id="f-id" required placeholder="例: sepia">
+          <div class="form-field" id="f-id-row" style="display:none">
+            <label>ID (自動生成、変更不可)</label>
+            <input type="text" id="f-id" disabled>
           </div>
           <div class="form-field">
             <label>名前</label>
@@ -247,7 +247,7 @@
     function showAdd() {
       editingId = null;
       document.getElementById('modal-title').textContent = '色を追加';
-      document.getElementById('f-id').disabled = false;
+      document.getElementById('f-id-row').style.display = 'none';
       document.getElementById('f-id').value = '';
       document.getElementById('f-name').value = '';
       document.getElementById('f-hex').value = '#c0c0c0';
@@ -265,8 +265,8 @@
       if (!c) return;
       editingId = id;
       document.getElementById('modal-title').textContent = '色を編集: ' + c.name;
+      document.getElementById('f-id-row').style.display = 'block';
       document.getElementById('f-id').value = c.id;
-      document.getElementById('f-id').disabled = true;
       document.getElementById('f-name').value = c.name;
       document.getElementById('f-hex').value = c.hex;
       document.getElementById('f-color').value = c.hex;
@@ -289,8 +289,10 @@
       hideError();
       const btn = document.getElementById('submit-btn');
       btn.disabled = true; btn.textContent = '保存中…';
+      // 新規追加時はID自動生成、編集時は既存IDを使う
+      const generatedId = editingId || ('color-' + Date.now());
       const input = {
-        id: document.getElementById('f-id').value.trim(),
+        id: generatedId,
         name: document.getElementById('f-name').value.trim(),
         hex: document.getElementById('f-hex').value.trim(),
         category: document.getElementById('f-category').value,
