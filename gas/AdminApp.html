@@ -185,8 +185,8 @@
             </select>
           </div>
           <div class="form-field">
-            <label>販売場所 (カンマ区切り)</label>
-            <input type="text" id="f-locations" value="lab,ankora,bungujoshi">
+            <label>販売場所</label>
+            <div id="f-locations-checks" style="display:flex; flex-wrap:wrap; gap:12px; padding:6px 0;"></div>
           </div>
           <div class="form-field">
             <label>表示順 (数値)</label>
@@ -210,14 +210,41 @@
 
   <script>
     let allColors = [];
+    let allLocations = [];
+    let locationMap = {}; // id → name
     let currentFilter = 'all';
     let editingId = null;
 
     function load() {
       google.script.run
-        .withSuccessHandler(function(c) { allColors = c || []; render(); })
+        .withSuccessHandler(function(locs) {
+          allLocations = locs || [];
+          locationMap = {};
+          for (const l of allLocations) locationMap[l.id] = l.name;
+          google.script.run
+            .withSuccessHandler(function(c) { allColors = c || []; render(); })
+            .withFailureHandler(onError)
+            .apiListColors();
+        })
         .withFailureHandler(onError)
-        .apiListColors();
+        .apiListLocations();
+    }
+
+    function renderLocationChecks(selected) {
+      const el = document.getElementById('f-locations-checks');
+      const sel = new Set(selected || []);
+      el.innerHTML = allLocations.map(function(l) {
+        const checked = sel.has(l.id) ? 'checked' : '';
+        return '<label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">' +
+          '<input type="checkbox" value="' + escapeAttr(l.id) + '" ' + checked + '>' +
+          escapeHtml(l.name) +
+        '</label>';
+      }).join('');
+    }
+
+    function getSelectedLocations() {
+      const boxes = document.querySelectorAll('#f-locations-checks input[type="checkbox"]:checked');
+      return Array.from(boxes).map(function(b) { return b.value; });
     }
 
     function setFilter(f) {
@@ -246,7 +273,7 @@
           '<td><button class="name-btn" onclick="showEdit(\'' + escapeAttr(c.id) + '\')">' + escapeHtml(c.name) + '</button></td>' +
           '<td>' + escapeHtml(c.category) + '</td>' +
           '<td><span class="status-badge ' + (isDisc ? 'discontinued' : 'active') + '">' + (isDisc ? '廃盤' : '販売中') + '</span></td>' +
-          '<td>' + escapeHtml((c.locations || []).join(', ')) + '</td>' +
+          '<td>' + escapeHtml((c.locations || []).map(function(id){ return locationMap[id] || id; }).join(', ')) + '</td>' +
           '<td>' + (c.sortOrder || 0) + '</td>' +
           '<td>' + escapeHtml(c.note || '') + '</td>' +
           '<td><div class="row-actions">' +
@@ -276,7 +303,7 @@
       document.getElementById('f-hex').value = '#c0c0c0';
       document.getElementById('f-color').value = '#c0c0c0';
       document.getElementById('f-category').value = 'solid';
-      document.getElementById('f-locations').value = 'lab,ankora,bungujoshi';
+      renderLocationChecks(allLocations.map(function(l) { return l.id; })); // 全店舗チェック
       document.getElementById('f-sortOrder').value = 500;
       document.getElementById('f-note').value = '';
       hideError();
@@ -294,7 +321,7 @@
       document.getElementById('f-hex').value = c.hex;
       document.getElementById('f-color').value = c.hex;
       document.getElementById('f-category').value = c.category;
-      document.getElementById('f-locations').value = (c.locations || []).join(',');
+      renderLocationChecks(c.locations || []);
       document.getElementById('f-sortOrder').value = c.sortOrder || 0;
       document.getElementById('f-note').value = c.note || '';
       hideError();
@@ -321,7 +348,7 @@
         category: document.getElementById('f-category').value,
         status: 'ACTIVE',
         sortOrder: Number(document.getElementById('f-sortOrder').value),
-        locations: document.getElementById('f-locations').value.split(',').map(function(s){return s.trim();}).filter(function(s){return s;}),
+        locations: getSelectedLocations(),
         note: document.getElementById('f-note').value.trim(),
       };
       google.script.run

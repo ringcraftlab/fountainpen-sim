@@ -151,6 +151,10 @@ function apiListColors() {
   requireAdmin();
   return readAllColors();
 }
+function apiListLocations() {
+  requireAdmin();
+  return listLocations();
+}
 function apiUpsertColor(input) {
   requireAdmin();
   return upsertColor(input);
