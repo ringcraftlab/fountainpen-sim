@@ -3,6 +3,7 @@ import { Layout } from './components/Layout';
 import { SimulatorPage } from './pages/SimulatorPage';
 import { CollectionsPage } from './pages/CollectionsPage';
 import { InventoryPage } from './pages/InventoryPage';
+import { PalettePage } from './pages/PalettePage';
 
 export const router = createBrowserRouter([
   {
@@ -13,6 +14,7 @@ export const router = createBrowserRouter([
       { path: 'simulator', element: <SimulatorPage /> },
       { path: 'collections', element: <CollectionsPage /> },
       { path: 'inventory', element: <InventoryPage /> },
+      { path: 'palette', element: <PalettePage /> },
     ],
   },
 ]);

@@ -5,6 +5,7 @@ const navItems = [
   { to: '/simulator', label: 'シミュレーター' },
   { to: '/collections', label: 'コレクション' },
   { to: '/inventory', label: '手持ち' },
+  { to: '/palette', label: 'パレット' },
 ];
 
 export function Layout() {
@@ -21,7 +22,7 @@ export function Layout() {
       </main>
 
       <nav className="sticky bottom-0 border-t border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 backdrop-blur">
-        <ul className="max-w-5xl mx-auto grid grid-cols-3">
+        <ul className="max-w-5xl mx-auto grid grid-cols-4">
           {navItems.map((item) => (
             <li key={item.to}>
               <NavLink
