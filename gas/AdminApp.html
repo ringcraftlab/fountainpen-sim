@@ -140,7 +140,6 @@
             <th>カテゴリ</th>
             <th>状態</th>
             <th>販売場所</th>
-            <th style="width:80px">表示順</th>
             <th>備考</th>
             <th style="width:180px; text-align:right">操作</th>
           </tr>
@@ -187,10 +186,6 @@
           <div class="form-field">
             <label>販売場所</label>
             <div id="f-locations-checks" style="display:flex; flex-wrap:wrap; gap:12px; padding:6px 0;"></div>
-          </div>
-          <div class="form-field">
-            <label>表示順 (数値)</label>
-            <input type="number" id="f-sortOrder" value="500">
           </div>
           <div class="form-field">
             <label>備考 (任意)</label>
@@ -263,7 +258,7 @@
         return true;
       });
       if (items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty">該当する色がありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">該当する色がありません</td></tr>';
         return;
       }
       tbody.innerHTML = items.map(function(c) {
@@ -274,7 +269,6 @@
           '<td>' + escapeHtml(c.category) + '</td>' +
           '<td><span class="status-badge ' + (isDisc ? 'discontinued' : 'active') + '">' + (isDisc ? '廃盤' : '販売中') + '</span></td>' +
           '<td>' + escapeHtml((c.locations || []).map(function(id){ return locationMap[id] || id; }).join(', ')) + '</td>' +
-          '<td>' + (c.sortOrder || 0) + '</td>' +
           '<td>' + escapeHtml(c.note || '') + '</td>' +
           '<td><div class="row-actions">' +
             '<button class="btn" onclick="showEdit(\'' + escapeAttr(c.id) + '\')">編集</button>' +
@@ -304,7 +298,6 @@
       document.getElementById('f-color').value = '#c0c0c0';
       document.getElementById('f-category').value = 'solid';
       renderLocationChecks(allLocations.map(function(l) { return l.id; })); // 全店舗チェック
-      document.getElementById('f-sortOrder').value = 500;
       document.getElementById('f-note').value = '';
       hideError();
       document.getElementById('modal').style.display = 'flex';
@@ -322,7 +315,6 @@
       document.getElementById('f-color').value = c.hex;
       document.getElementById('f-category').value = c.category;
       renderLocationChecks(c.locations || []);
-      document.getElementById('f-sortOrder').value = c.sortOrder || 0;
       document.getElementById('f-note').value = c.note || '';
       hideError();
       document.getElementById('modal').style.display = 'flex';
@@ -340,6 +332,7 @@
       const btn = document.getElementById('submit-btn');
       btn.disabled = true; btn.textContent = '保存中…';
       // 新規追加時はID自動生成、編集時は既存IDを使う
+      // sortOrder は GAS 側で自動採番 (未指定なら最大値+10、既存編集なら現在値保持)
       const generatedId = editingId || ('color-' + Date.now());
       const input = {
         id: generatedId,
@@ -347,7 +340,6 @@
         hex: document.getElementById('f-hex').value.trim(),
         category: document.getElementById('f-category').value,
         status: 'ACTIVE',
-        sortOrder: Number(document.getElementById('f-sortOrder').value),
         locations: getSelectedLocations(),
         note: document.getElementById('f-note').value.trim(),
       };

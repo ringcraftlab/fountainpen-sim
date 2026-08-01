@@ -258,13 +258,24 @@ function upsertColor(params) {
   if (['ACTIVE', 'DISCONTINUED'].indexOf(status) < 0) {
     throw makeError('validation', 'status must be ACTIVE/DISCONTINUED');
   }
+  // sortOrder が未指定なら自動採番 (既存最大値+10)、既存色の編集なら現在値を保持
+  let sortOrder = Number(params.sortOrder || 0);
+  if (!sortOrder) {
+    const existing = readAllColors().find(function (c) { return c.id === params.id; });
+    if (existing) {
+      sortOrder = existing.sortOrder;
+    } else {
+      const max = readAllColors().reduce(function (m, c) { return Math.max(m, c.sortOrder || 0); }, 0);
+      sortOrder = max + 10;
+    }
+  }
   const record = {
     id: String(params.id),
     name: String(params.name),
     hex: String(params.hex),
     category: category,
     status: status,
-    sortOrder: Number(params.sortOrder || 0),
+    sortOrder: sortOrder,
     locations: (params.locations || []).join(','),
     note: String(params.note || ''),
   };
