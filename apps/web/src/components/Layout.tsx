@@ -1,15 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { isAdminMode } from '@/lib/api/provider';
 
-const baseNav = [
+const navItems = [
   { to: '/simulator', label: 'シミュレーター' },
   { to: '/collections', label: 'コレクション' },
   { to: '/inventory', label: '手持ち' },
 ];
-const adminNav = [{ to: '/palette', label: 'パレット' }];
-
-const navItems = isAdminMode() ? [...baseNav, ...adminNav] : baseNav;
 
 export function Layout() {
   return (
@@ -25,12 +21,7 @@ export function Layout() {
       </main>
 
       <nav className="sticky bottom-0 border-t border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/90 backdrop-blur">
-        <ul
-          className={cn(
-            'max-w-5xl mx-auto grid',
-            navItems.length === 4 ? 'grid-cols-4' : 'grid-cols-3',
-          )}
-        >
+        <ul className="max-w-5xl mx-auto grid grid-cols-3">
           {navItems.map((item) => (
             <li key={item.to}>
               <NavLink
